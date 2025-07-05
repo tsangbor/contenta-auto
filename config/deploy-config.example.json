@@ -1,0 +1,169 @@
+{
+    "ai_features": {
+        "enable_visual_feedback": false,
+        "visual_feedback_max_images": 3,
+        "skip_content_refinement": false,
+        "cost_optimization": {
+            "prefer_gemini": true,
+            "use_batch_for_articles": true,
+            "max_tokens_per_request": 16000,
+            "smart_model_selection": true,
+            "cache_ai_responses": true,
+            "use_free_tier_first": true,
+            "_comment": "成本優化策略 - 優先使用 Gemini"
+        },
+        "_comment": "視覺反饋功能配置說明",
+        "_enable_visual_feedback": "是否啟用視覺反饋循環 (預設 false 節省成本)",
+        "_visual_feedback_max_images": "最多分析的圖片數量 (預設 3)",
+        "_skip_content_refinement": "是否跳過文案精練 (預設 false)",
+        "_cost_optimization_tips": {
+            "1": "使用 gpt-4o-mini 替代 gpt-4，成本降低 30倍",
+            "2": "啟用批次 API 可享 50% 折扣",
+            "3": "關閉視覺反饋節省 80% token",
+            "4": "使用 DALL-E 3 標準品質而非 HD",
+            "5": "啟用回應快取避免重複請求"
+        }
+    },
+    "api_credentials": {
+        "domain_register": {
+            "api_key": "YOUR_DOMAIN_REGISTER_API_KEY",
+            "api_secret": "YOUR_DOMAIN_REGISTER_API_SECRET",
+            "endpoint": ""
+        },
+        "bunnycdn": {
+            "api_key": "YOUR_BUNNYCDN_API_KEY"
+        },
+        "cloudflare": {
+            "api_token": "YOUR_CLOUDFLARE_API_TOKEN",
+            "zone_id": "YOUR_CLOUDFLARE_ZONE_ID",
+            "email": "your-email@example.com"
+        },
+        "lihi_domain": {
+            "api_key": "YOUR_LIHI_API_KEY",
+            "endpoint": "https://app.lihi.io/api/domain/purchase"
+        },
+        "btcn": {
+            "panel_url": "https://your-panel.example.com:8888",
+            "_authentication_methods": "支援兩種認證方式",
+            "_method_1_cookie": "瀏覽器 Cookie 認證（推薦）",
+            "session_cookie": "YOUR_SESSION_COOKIE",
+            "http_token": "YOUR_HTTP_TOKEN",
+            "_method_2_api_key": "API Key 認證（備用方案）",
+            "api_key": "YOUR_BTCN_API_KEY",
+            "_configuration_notes": {
+                "1": "優先使用 Cookie 認證，更穩定",
+                "2": "API Key 作為備用方案",
+                "3": "從瀏覽器開發者工具獲取 Cookie 和 Token",
+                "4": "Cookie 格式：session=xxx; X-CSRFToken=xxx"
+            }
+        },
+        "openai": {
+            "api_key": "sk-proj-YOUR_OPENAI_API_KEY",
+            "model": "gpt-4o-mini",
+            "image_model": "dall-e-3",
+            "use_gpt_image": false,
+            "base_url": "https://api.openai.com/v1/",
+            "_model_options": "gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, gpt-4o, gpt-4o-mini, gpt-4",
+            "_use_gpt_image": "是否使用 GPT Image 1 進行圖片生成（更好的世界知識），預設 false 節省成本",
+            "_model_recommendations": {
+                "best_value": "gpt-4o-mini - 最佳性價比，適合大部分任務",
+                "high_quality": "gpt-4o - 高品質輸出，成本較高",
+                "budget": "gpt-3.5-turbo - 預算選項，基本任務足夠"
+            },
+            "batch_api": {
+                "enabled": true,
+                "discount": 0.5,
+                "_comment": "批次 API 可享 50% 折扣，適合非即時任務"
+            }
+        },
+        "gemini": {
+            "api_key": "YOUR_GEMINI_API_KEY",
+            "model": "gemini-2.5-flash",
+            "base_url": "https://generativelanguage.googleapis.com/v1beta",
+            "image_model": "imagen-3",
+            "_model_options": "gemini-2.5-flash, gemini-2.5-flash-lite, gemini-1.5-pro, gemini-1.5-flash",
+            "_pricing_advantage": {
+                "flash": "$0.30/1M 輸入, $2.50/1M 輸出 - 比 OpenAI 便宜 10倍",
+                "flash_lite": "$0.10/1M 輸入, $0.40/1M 輸出 - 最佳性價比",
+                "imagen3": "$0.03/圖 - 比 DALL-E 3 便宜 25%"
+            },
+            "free_tier": {
+                "enabled": true,
+                "daily_limit": "1500 RPD",
+                "context_caching": true
+            }
+        }
+    },
+    "deployment": {
+        "server_ip": "YOUR_SERVER_IP",
+        "server_host": "your-server.example.com",
+        "ssh_user": "root",
+        "ssh_port": 22,
+        "ssh_key_path": "~/.ssh/id_rsa",
+        "wordpress_version": "latest",
+        "wordpress_locale": "zh_TW",
+        "admin_user": "admin@example.com",
+        "admin_password": "STRONG_PASSWORD_HERE",
+        "limited_admin_password": ""
+    },
+    "wordpress_security": {
+        "hide_admin_login": false,
+        "custom_admin_url": "dashboard",
+        "admin_url_prefix": "secure"
+    },
+    "plugins": {
+        "required": [
+            "advanced-custom-fields",
+            "auto-upload-images",
+            "better-search-replace",
+            "contact-form-7",
+            "elementor",
+            "elementor-pro",
+            "flying-press",
+            "one-user-avatar",
+            "performance-lab",
+            "seo-by-rank-math",
+            "seo-by-rank-math-pro",
+            "shortpixel-image-optimiser",
+            "google-site-kit",
+            "ultimate-elementor",
+            "insert-headers-and-footers"
+        ],
+        "license_required": {
+            "elementor-pro": "YOUR_ELEMENTOR_PRO_LICENSE",
+            "flying-press": "YOUR_FLYING_PRESS_LICENSE"
+        }
+    },
+    "cache_files": [
+        "advanced-cache.php",
+        "object-cache.php"
+    ],
+    "upload": {
+        "max_file_size": "64M",
+        "max_execution_time": 300,
+        "memory_limit": "512M"
+    },
+    "test": {
+        "key": "test_value"
+    },
+    "site": {
+        "domain": "example.tw",
+        "name": "我的網站",
+        "description": "網站描述",
+        "admin_email": "admin@example.com",
+        "user_email": "user@example.com",
+        "keywords": [
+            "關鍵字1",
+            "關鍵字2",
+            "關鍵字3"
+        ],
+        "target_audience": "目標受眾描述",
+        "brand_personality": "品牌個性描述",
+        "unique_value": "獨特價值主張",
+        "service_categories": [
+            "服務1",
+            "服務2",
+            "服務3"
+        ]
+    }
+}
