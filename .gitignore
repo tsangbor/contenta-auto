@@ -1,0 +1,52 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear in the root of a volume
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Data files (如果包含敏感資料)
+# data/
+
+# Archive files
+archive/
+_archive/
+
+# Zip files
+zip/
+
+# Config files with sensitive info (視需要調整)
+# config/
+
+# JSON files with sensitive data (視需要調整)
+# json/
+
+# Shell 設定檔 (個人化設定)
+.bashrc
+.zshrc

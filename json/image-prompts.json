@@ -1,0 +1,83 @@
+{
+   "logo": {
+    "title": "網站 Logo",
+    "prompt": "使用Potta One字體風格的文字 Logo「木子心」，文字色為 #2D4C4A，風格神祕療癒，融入星星、橋、溪流、能量流動等圖形元素，背景透明",
+    "extra": "750x200 尺寸，PNG 透明背景",
+    "ai": "openai",
+    "style": "logo",
+    "quality": "high",
+    "size": "750x200"
+  }, 
+  "index_hero_bg": {
+    "title": "首頁 Hero 區塊底圖",
+    "prompt": "一張深藍星河夜空與溪流交錯的抽象照片，靜謐神祕，星星灑落在橋上與水面，帶出內在意識流動感，比例16:9，夢幻氛圍，柔和色調",
+    "extra": "16:9 比例，情境氛圍",
+    "ai": "gemini",
+    "style": "cinematic",
+    "quality": "high",
+    "size": "1920x1080"
+  },
+  "index_hero_photo": {
+    "title": "首頁個人照片",
+    "prompt": "一位專業女性品牌顧問的溫暖肖像照，坐在咖啡廳裡，自然光線，溫和笑容，穿著簡約優雅的服裝，背景模糊的咖啡廳環境",
+    "extra": "專業肖像，溫暖氛圍",
+    "ai": "gemini",
+    "style": "natural",
+    "quality": "high",
+    "size": "800x800"
+  },
+  "index_about_photo": {
+    "title": "關於我區塊照片",
+    "prompt": "一張展現工作與生活平衡的照片，筆記本電腦、咖啡杯、筆記本和植物放在木質桌面上，自然光線，溫馨的工作空間氛圍",
+    "extra": "生活風格攝影",
+    "ai": "gemini",
+    "style": "lifestyle",
+    "quality": "high",
+    "size": "1200x800"
+  },
+  "index_footer_cta_bg": {
+    "title": "Footer CTA 背景圖",
+    "prompt": "柔和的漸層背景，從淡藍色到淡紫色的漸變，加上細膩的星點裝飾，營造夢幻溫柔的氛圍",
+    "extra": "漸層背景，16:9比例",
+    "ai": "gemini",
+    "style": "abstract",
+    "quality": "medium",
+    "size": "1920x600"
+  },
+  "about_hero_bg": {
+    "title": "關於我頁面標題背景",
+    "prompt": "簡約的幾何圖案背景，淡色調，包含圓形和線條元素，傳達專業而溫和的感覺",
+    "extra": "頁面標題背景  16:9 比例",
+    "ai": "openai",
+    "style": "geometric",
+    "quality": "medium",
+    "size": "1920x400"
+  },
+  "archive_hero_bg": {
+    "title": "部落格列表頁標題背景",
+    "prompt": "一張淡色調的抽象幾何圖案背景，包含圓形和線條元素，營造現代感和專業感，適合作為部落格列表頁的背景",
+    "extra": "幾何圖案背景， 16:9 比例",
+    "ai": "gemini",
+    "style": "geometric",
+    "quality": "medium",
+    "size": "1920x1080"
+  },
+  "service_hero_bg": {
+    "title": "服務項目頁面標題背景",
+    "prompt": "溫暖的咖啡廳環境，自然光線透過窗戶灑進來，木質桌椅，綠色植物，營造舒適的交流氛圍",
+    "extra": "環境攝影，溫暖氛圍 16:9 比例",
+    "ai": "gemini",
+    "style": "natural",
+    "quality": "high",
+    "size": "1920x1080"
+  },
+  "contact_hero_bg": {
+    "title": "聯絡頁面標題背景",
+    "prompt": "溫暖的咖啡廳環境，自然光線透過窗戶灑進來，木質桌椅，綠色植物，營造舒適的交流氛圍",
+    "extra": "環境攝影，溫暖氛圍 16:9 比例",
+    "ai": "gemini",
+    "style": "natural",
+    "quality": "high",
+    "size": "1920x1080"
+  }
+}

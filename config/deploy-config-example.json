@@ -1,0 +1,157 @@
+{
+  "site": {
+    "domain": "example.tw",
+    "name": "我的網站",
+    "description": "網站描述",
+    "admin_email": "admin@example.com",
+    "user_email": "user@example.com",
+    "keywords": ["關鍵字1", "關鍵字2", "關鍵字3"],
+    "target_audience": "目標受眾描述",
+    "brand_personality": "品牌個性描述",
+    "unique_value": "獨特價值主張",
+    "service_categories": ["服務1", "服務2", "服務3"]
+  },
+  "api_credentials": {
+    "cloudflare": {
+      "email": "your@email.com",
+      "api_key": "YOUR_GLOBAL_API_KEY",
+      "endpoint": "https://api.cloudflare.com/client/v4/"
+    },
+    "lihi_domain": {
+      "api_key": "nlX6ZANNyHGdLuKrCP1sMg4g0hziqTA1Pc6JMMkj",
+      "endpoint": "https://app.lihi.io/api/domain/"
+    },
+    "btcn": {
+      "panel_url": "http://jp1.contenta.tw:8888",
+      "_authentication_methods": "支援兩種認證方式",
+      "_method_1_cookie": "瀏覽器 Cookie 認證（推薦）",
+      "session_cookie": "session=your_session_cookie_value; X-CSRFToken=your_csrf_token",
+      "http_token": "your_http_token_from_browser",
+      "_method_2_api_key": "API Key 認證（備用方案）",
+      "api_key": "your_bt_panel_api_key",
+      "_configuration_notes": {
+        "1": "優先使用 Cookie 認證，更穩定",
+        "2": "API Key 作為備用方案",
+        "3": "從瀏覽器開發者工具獲取 Cookie 和 Token",
+        "4": "Cookie 格式：session=xxx; X-CSRFToken=xxx"
+      }
+    },
+    "openai": {
+      "api_key": "your_openai_api_key",
+      "model": "gpt-4o-mini",
+      "image_model": "dall-e-3",
+      "use_gpt_image": false,
+      "base_url": "https://api.openai.com/v1/",
+      "_model_options": "gpt-4.1, gpt-4.1-mini, gpt-4.1-nano, gpt-4o, gpt-4o-mini, gpt-4",
+      "_use_gpt_image": "是否使用 GPT Image 1 進行圖片生成（更好的世界知識），預設 false 節省成本",
+      "_model_recommendations": {
+        "best_value": "gpt-4o-mini - 最佳性價比，適合大部分任務",
+        "high_quality": "gpt-4o - 高品質輸出，成本較高",
+        "budget": "gpt-3.5-turbo - 預算選項，基本任務足夠"
+      },
+      "batch_api": {
+        "enabled": true,
+        "discount": 0.5,
+        "_comment": "批次 API 可享 50% 折扣，適合非即時任務"
+      }
+    },
+    "gemini": {
+      "api_key": "your_gemini_api_key",
+      "model": "gemini-2.5-flash",
+      "base_url": "https://generativelanguage.googleapis.com/v1beta",
+      "image_model": "imagen-3",
+      "_model_options": "gemini-2.5-flash, gemini-2.5-flash-lite, gemini-1.5-pro, gemini-1.5-flash",
+      "_pricing_advantage": {
+        "flash": "$0.30/1M 輸入, $2.50/1M 輸出 - 比 OpenAI 便宜 10倍",
+        "flash_lite": "$0.10/1M 輸入, $0.40/1M 輸出 - 最佳性價比",
+        "imagen3": "$0.03/圖 - 比 DALL-E 3 便宜 25%"
+      },
+      "free_tier": {
+        "enabled": true,
+        "daily_limit": "1500 RPD",
+        "context_caching": true
+      }
+    },
+  },
+  "wordpress_admin": {
+    "limited_admin_email": "client@example.com",
+    "limited_admin_password": "SecurePassword123!",
+    "_comment": "專用管理員帳號設定，用於客戶管理網站"
+  },
+  "plugins": {
+    "license_required": {
+      "elementor-pro": "your_elementor_pro_license_key",
+      "flying-press": "your_flying_press_license_key",
+      "_comment": "付費外掛授權金鑰設定"
+    }
+  },
+  "ai_features": {
+    "enable_visual_feedback": false,
+    "visual_feedback_max_images": 3,
+    "skip_content_refinement": false,
+    "cost_optimization": {
+      "prefer_gemini": true,
+      "use_batch_for_articles": true,
+      "max_tokens_per_request": 4000,
+      "smart_model_selection": true,
+      "cache_ai_responses": true,
+      "use_free_tier_first": true,
+      "_comment": "成本優化策略 - 優先使用 Gemini"
+    },
+    "_comment": "視覺反饋功能配置說明",
+    "_enable_visual_feedback": "是否啟用視覺反饋循環 (預設 false 節省成本)",
+    "_visual_feedback_max_images": "最多分析的圖片數量 (預設 3)",
+    "_skip_content_refinement": "是否跳過文案精練 (預設 false)",
+    "_cost_optimization_tips": {
+      "1": "使用 gpt-4o-mini 替代 gpt-4，成本降低 30倍",
+      "2": "啟用批次 API 可享 50% 折扣",
+      "3": "關閉視覺反饋節省 80% token",
+      "4": "使用 DALL-E 3 標準品質而非 HD",
+      "5": "啟用回應快取避免重複請求"
+    }
+  },
+  "deployment": {
+    "server_host": "your.server.hostname.or.ip",
+    "server_ip": "your.server.ip.address",
+    "ssh_user": "root",
+    "ssh_port": 22,
+    "ssh_key_path": "/path/to/your/ssh/private/key",
+    "wordpress_version": "latest",
+    "wordpress_locale": "zh_TW",
+    "admin_user": "contentatw@gmail.com",
+    "admin_password": "ContentaTW2025!",
+    "limited_admin_password": "LimitedAdmin2025!"
+  },
+  "plugins": {
+    "required": [
+      "advanced-custom-fields",
+      "auto-upload-images",
+      "better-search-replace",
+      "contact-form-7",
+      "elementor",
+      "elementor-pro",
+      "flying-press",
+      "one-user-avatar",
+      "performance-lab",
+      "astra-pro-sites",
+      "seo-by-rank-math",
+      "seo-by-rank-math-pro",
+      "google-site-kit",
+      "ultimate-elementor",
+      "insert-headers-and-footers"
+    ],
+    "license_required": {
+      "elementor-pro": "your_elementor_pro_license_key",
+      "flying-press": "your_flying_press_license_key"
+    }
+  },
+  "cache_files": [
+    "advanced-cache.php",
+    "object-cache.php"
+  ],
+  "upload": {
+    "max_file_size": "64M",
+    "max_execution_time": 300,
+    "memory_limit": "512M"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "project_name": "contenta-auto",
+  "sync_preferences": {
+    "auto_commit": true,
+    "auto_push": true,
+    "default_branch": "main",
+    "commit_message_format": "自動同步: {timestamp}",
+    "timestamp_format": "%Y-%m-%d %H:%M:%S",
+    "exclude_patterns": [
+      ".DS_Store",
+      "*.log",
+      "*.tmp",
+      "*.temp"
+    ],
+    "pre_sync_commands": [],
+    "post_sync_commands": [],
+    "push_tags": false,
+    "verbose": true
+  },
+  "github": {
+    "remote_name": "origin",
+    "username": "",
+    "repository": ""
+  },
+  "created_at": "2025-07-05",
+  "last_sync": null
+}

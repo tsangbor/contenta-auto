@@ -1,0 +1,14 @@
+{
+  "name": "FlyingPress",
+  "slug": "flying-press",
+  "author": "<a href='https://flyingpress.com'>FlyingPress</a>",
+  "author_profile": "https://flyingpress.com",
+  "version": "5.0.2",
+  "requires": "4.7",
+  "tested": "6.8.1",
+  "requires_php": "7.4",
+  "sections": {
+    "description": "Lightning-Fast WordPress on Autopilot",
+    "changelog": "<h4>5.0.2 - 05 June, 2025</h4><ul><li>Fix: Empty URLs being inserted to the queue in certain cases</li><li>Fix: Separate cache for mobile devices was not generated post v5.0.1</li></ul><p>Full changelog: <a href='https://flyingpress.com/changelog/'>flyingpress.com/changelog</a></p>"
+  }
+}

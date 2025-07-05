@@ -1,0 +1,229 @@
+{
+  "website_info": {
+    "website_blogname": "木子心的宇宙碎片",
+    "website_blogdescription": "在城市與生活之間，找到你舒服的節奏",
+    "website_domain": "example.tw",
+    "website_url": "https://www.example.tw",
+    "website_author_description": "我是木子心，一位從品牌代理商到品牌端走過多段旅程的行銷人。過去的我習慣快節奏。",
+    "seo_title": "木子心的宇宙碎片｜品牌顧問 × 生活策劃人",
+    "seo_description": "一個溫柔觀察生活與品牌節奏的網站。顧問合作、體驗策劃與寫作靈感，陪你找到自己的位置與方向。",
+    "seo_keywords": "品牌顧問, 生活策劃, 體驗設計, 內容創作, 個人品牌",
+    "website_admin_email": "admin@example.com", 
+    "language": "zh_TW",
+    "timezone": "Asia/Taipei",
+    "header": "header-001", //Elementor預設匯入版型,
+    "footer": "footer-001", //Elementor預設匯入版型
+    "archive": "archive-001", //Elementor預設匯入版型
+    "error404": "error404-001", //Elementor預設匯入版型
+    "singlepost": "singlepost-001", //Elementor預設匯入版型
+    "singlepage": "singlepage-001", //Elementor預設匯入版型
+    "logo": "/wp-content/uploads/2025/06/logo.png", //網站logo
+    "favicon": "/wp-content/uploads/2025/06/favicon.ico", //網站favicon
+    "color_scheme": "expert-theme-1"
+  },
+  "page_list": {  
+    "home": "首頁",
+    "about": "關於我",
+    "blog": "部落格",
+    "service": "服務項目",
+    "contact": "聯絡我"
+  },
+  "layout_selection": [
+    {
+      "page": "home",
+      "container": {
+        "hero": "homehero001",
+        "about": "about003",
+        "service": "service003",
+        "archive": "archive002"
+      }
+    },
+    {
+      "page": "about",
+      "container": {
+        "hero": "hero001",
+        "about": "about003",
+        "contact": "contact001"
+      }
+    },
+    {
+      "page": "service",
+      "container": {
+        "hero": "hero001",
+        "service": "service003",
+        "contact": "contact002"
+      }
+    },
+    {
+      "page": "blog",
+      "container": {
+        "hero": "hero003",
+        "archive": "archive001"
+      }
+    },
+    {
+      "page": "contact",
+      "container": {
+        "hero": "hero001",
+        "contact": "contact001",
+      }
+    }
+  ],
+  "content_options": {
+    "index_hero_bg": "/wp-content/uploads/2025/06/hero-bg.jpg",
+    "index_hero_photo": "/wp-content/uploads/2025/06/profile-photo.jpg",
+    "index_hero_title": "在城市與生活之間，找到你舒服的節奏",
+    "index_hero_subtitle": "品牌顧問 × 生活策劃人 × 空間旅人\\n我陪你一起釐清方向、打造風格、找到你想過的生活",
+    "index_hero_cta_text": "欸我懂你 ☕️",
+    "index_hero_cta_link": "/關於我",
+    "index_header_cta_title": "部落格",
+    "index_header_cta_link": "/blog",
+    "index_about_title": "你好，我是木子心",
+    "index_about_subtitle": "喜歡咖啡廳、策劃與旅行的行銷人",
+    "index_about_content": "我是木子心，一位從品牌代理商到品牌端走過多段旅程的行銷人。過去的我習慣快節奏、講效率、追數據，但漸漸地，我開始傾聽內在的聲音，發現生活其實也值得被好好策劃。",
+    "index_about_cta_text": "一起聊聊吧 ☕️",
+    "index_about_cta_link": "/關於我",
+    "index_about_photo": "/wp-content/uploads/2025/06/about-photo.jpg",
+    
+    "index_service_title": "我可以幫你做的事",
+    "index_service_subtitle": "策略整合、體驗設計與有溫度的合作提案",
+    "index_service_list": [
+      {
+        "icon": "fas fa-lightbulb",
+        "title": "品牌顧問服務",
+        "description": "協助釐清品牌定位、內容策略與視覺語言，打造有靈魂的品牌表達。"
+      },
+      {
+        "icon": "fas fa-map-marked-alt",
+        "title": "體驗設計 × 空間推薦",
+        "description": "推薦讓人安心的場域，設計有感的旅程與日常體驗，應用於旅遊、選品或合作空間。"
+      },
+      {
+        "icon": "fas fa-handshake",
+        "title": "活動策劃與品牌合作",
+        "description": "主題設定、氛圍營造與流程設計，量身打造具溫度與共鳴的交流場合。"
+      }
+    ],
+    "index_service_cta_text": "聯絡我 ☕️",
+    "index_service_cta_link": "/聯絡我",
+    
+    "index_archive_title": "靈感誌",
+    "index_archive_subtitle": "關於內容、靈感、觀察與生活的碎片",
+    
+    "index_footer_cta_title": "訂閱我的碎片盒",
+    "index_footer_cta_subtitle": "每週一封信，關於內容、靈感、觀察與生活的碎片。",
+    "index_footer_cta_button": "立即訂閱",
+    "index_footer_cta_bg": "/wp-content/uploads/2025/06/footer-bg.jpg",
+    "index_footer_title": "木子心｜品牌顧問 × 生活策劃人",
+    "index_footer_subtitle": "生活，其實也是一種體驗設計。",
+    "index_footer_fb": "https://www.facebook.com/your-page",
+    "index_footer_ig": "https://www.instagram.com/your-account",
+    "index_footer_line": "https://line.me/ti/p/your-line-id",
+    "index_footer_yt": "https://youtube.com/@your-channel",
+    "index_footer_email": "hello@example.com",
+
+    "about_hero_title": "關於我hero標題",
+    "about_hero_subtitle": "關於我hero副標題",
+    "about_hero_bg": "/wp-content/uploads/2025/06/hero-bg.jpg",
+    "about_title":"關於我",
+    "about_content":"",
+    "about_photo":"/wp-content/uploads/2025/06/about-photo.jpg",
+
+
+    "archive_hero_title": "部落格文章清單hero標題",
+    "archive_hero_subtitle": "部落格文章清單hero副標題",
+    "archive_hero_bg": "/wp-content/uploads/2025/06/hero-bg.jpg",
+    "contact_hero_title": "聯絡我hero標題",
+    "contact_hero_subtitle": "聯絡我hero副標題",
+    "contact_hero_bg": "/wp-content/uploads/2025/06/hero-bg.jpg",
+
+    /* CTA區塊專用*/
+    "cta_title": "訂閱我的碎片盒",
+    "cta_subtitle": "每週一封信，關於內容、靈感、觀察與生活的碎片。",
+    "cta_button": "立即訂閱",
+    "cta_link": "立即訂閱",
+    "cta_bg": "/wp-content/uploads/2025/06/footer-bg.jpg",
+
+    
+  },
+  "menu_structure": {
+    "primary": [
+      {
+        "title": "首頁",
+        "url": "/",
+        "target": "_self"
+      },
+      {
+        "title": "關於我",
+        "url": "/關於我",
+        "target": "_self"
+      },
+      {
+        "title": "服務項目",
+        "url": "/服務項目",
+        "target": "_self"
+      },
+      {
+        "title": "部落格",
+        "url": "/blog",
+        "target": "_self"
+      },
+      {
+        "title": "聯絡我",
+        "url": "/聯絡我",
+        "target": "_self"
+      }
+    ]
+  },
+  "categories": [
+    {
+      "name": "人類圖小知識",
+      "slug": "human-design-knowledge",
+      "description": "從零開始，認識你內在的使用說明書。"
+    },
+    {
+      "name": "自我覺察",
+      "slug": "self-awareness",
+      "description": "讓文字成為一面鏡子，看見自己，也照見內在節奏。"
+    },
+    {
+      "name": "人類圖範例",
+      "slug": "human-design-examples",
+      "description": "真實故事，帶你走進「怎麼用」的世界。"
+    },
+    {
+      "name": "爻辭與流日",
+      "slug": "hexagram-transits",
+      "description": "一日一流動，練習與宇宙同頻。"
+    },
+    {
+      "name": "自我成長資源推薦",
+      "slug": "growth-resources",
+      "description": "我們在成長的路上不孤單。"
+    },
+    {
+      "name": "一對一服務介紹",
+      "slug": "consultation-services",
+      "description": "想更靠近自己？來聊聊你與你的設計。"
+    },
+    {
+      "name": "成功案例分享",
+      "slug": "success-stories",
+      "description": "這些人說出了他們看見自己的瞬間。"
+    }
+  ],
+  "social_media": {
+    "facebook": "https://www.facebook.com/your-page",
+    "instagram": "https://www.instagram.com/your-account",
+    "line": "https://line.me/ti/p/your-line-id",
+    "youtube": "https://youtube.com/@your-channel",
+    "email": "hello@example.com",
+    "linkedin": "https://www.linkedin.com/in/your-profile"
+  },
+  "contact_info": {
+    "email": "hello@example.com",
+    "phone": "+886-912-345-678",
+    "address": "台北市信義區信義路五段7號",
+    "business_hours": "週一至週五 09:00-18:00"
+  }
+}
