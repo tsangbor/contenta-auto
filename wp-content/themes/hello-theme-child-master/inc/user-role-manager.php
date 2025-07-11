@@ -211,7 +211,9 @@ function create_limited_admin_role() {
             'moderate_comments' => true,
             'upload_files' => true,
             'unfiltered_html' => true,      
-
+            // 🔧 新增：選單管理權限
+            'edit_theme_options' => true,   // 關鍵權限：主題選項編輯（包含選單管理）
+            
             // Elementor 權限（使用實際存在的權限）
             'create_notes_elementor-pro' => true,
             'edit_notes_elementor-pro' => true,

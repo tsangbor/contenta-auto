@@ -43,6 +43,7 @@ zip/
 
 # Config files with sensitive info
 config/deploy-config.json
+config/deploy-config-backup.json
 
 # JSON files with sensitive data (視需要調整)
 # json/
