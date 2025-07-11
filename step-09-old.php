@@ -1074,7 +1074,7 @@ try {
     }
     
     $template_dir = DEPLOY_BASE_PATH . '/template';
-    $data_dir = DEPLOY_BASE_PATH . '/data';
+    $data_dir = DEPLOY_BASE_PATH . '/data/' . $job_id;
     $image_prompts_path = $work_dir . '/json/image-prompts.json';
     
     // 讀取用戶資料

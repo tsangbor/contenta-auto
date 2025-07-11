@@ -1,0 +1,17 @@
+{
+  "url": "https://jp3.contenta.tw:8888/home",
+  "cookies": "cbffa9cfef96703cf3e4e7c627e7c1e5_ssl=2cd23b77-d9b7-4421-b04c-25168a43ed2a.cl7r_9PKmnStRFMb2Tws57_6w74",
+  "individual_cookies": [
+    {
+      "name": "cbffa9cfef96703cf3e4e7c627e7c1e5_ssl",
+      "value": "2cd23b77-d9b7-4421-b04c-25168a43ed2a.cl7r_9PKmnStRFMb2Tws57_6w74",
+      "domain": "jp3.contenta.tw",
+      "path": "/",
+      "expires": 1754347254.580431,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "timestamp": "2025-07-05T22:41:10.892Z"
+}

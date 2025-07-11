@@ -143,9 +143,12 @@ function updateJsonTemplateImagePaths($json_file, $image_mapping, $template_name
                         // 適應新的資料結構
                         $image_data = $image_mapping[$template_name][$placeholder];
                         $wp_url = is_array($image_data) ? $image_data['url'] : $image_data;
-                        $json_content = str_replace('{{' . $placeholder . '}}', $wp_url, $json_content);
+                        $attachment_id = is_array($image_data) ? $image_data['attachment_id'] : null;
+                        
+                        // 使用新的智能替換函數同時處理 URL 和 ID
+                        $json_content = replaceImagePlaceholderWithId($json_content, $placeholder, $wp_url, $attachment_id, $deployer);
                         $replacement_count++;
-                        $deployer->log("    ✅ 替換全域圖片佔位符: {{$placeholder}} -> $wp_url (模板: $template_name)");
+                        $deployer->log("    ✅ 替換全域圖片佔位符: {{$placeholder}} -> $wp_url" . ($attachment_id ? " (ID: $attachment_id)" : "") . " (模板: $template_name)");
                         $image_replaced = true;
                     } else {
                         // 如果當前模板沒有，搜尋所有頁面的映射
@@ -154,9 +157,12 @@ function updateJsonTemplateImagePaths($json_file, $image_mapping, $template_name
                                 // 適應新的資料結構
                                 $image_data = $page_images[$placeholder];
                                 $wp_url = is_array($image_data) ? $image_data['url'] : $image_data;
-                                $json_content = str_replace('{{' . $placeholder . '}}', $wp_url, $json_content);
+                                $attachment_id = is_array($image_data) ? $image_data['attachment_id'] : null;
+                                
+                                // 使用新的智能替換函數同時處理 URL 和 ID
+                                $json_content = replaceImagePlaceholderWithId($json_content, $placeholder, $wp_url, $attachment_id, $deployer);
                                 $replacement_count++;
-                                $deployer->log("    ✅ 替換全域圖片佔位符: {{$placeholder}} -> $wp_url (來源頁面: $page_name)");
+                                $deployer->log("    ✅ 替換全域圖片佔位符: {{$placeholder}} -> $wp_url" . ($attachment_id ? " (ID: $attachment_id)" : "") . " (來源頁面: $page_name)");
                                 $image_replaced = true;
                                 break;
                             }
@@ -260,9 +266,12 @@ function updateJsonTemplateImagePaths($json_file, $image_mapping, $template_name
                         // 適應新的資料結構
                         $image_data = $image_mapping[$template_name][$placeholder];
                         $wp_url = is_array($image_data) ? $image_data['url'] : $image_data;
-                        $json_content = str_replace('{{' . $placeholder . '}}', $wp_url, $json_content);
+                        $attachment_id = is_array($image_data) ? $image_data['attachment_id'] : null;
+                        
+                        // 使用新的智能替換函數同時處理 URL 和 ID
+                        $json_content = replaceImagePlaceholderWithId($json_content, $placeholder, $wp_url, $attachment_id, $deployer);
                         $replacement_count++;
-                        $deployer->log("    ✅ 替換圖片佔位符: {{$placeholder}} -> $wp_url (頁面: $template_name)");
+                        $deployer->log("    ✅ 替換圖片佔位符: {{$placeholder}} -> $wp_url" . ($attachment_id ? " (ID: $attachment_id)" : "") . " (頁面: $template_name)");
                         $image_replaced = true;
                     } else {
                         // 如果當前頁面沒有，搜尋其他頁面的映射
@@ -271,9 +280,12 @@ function updateJsonTemplateImagePaths($json_file, $image_mapping, $template_name
                                 // 適應新的資料結構
                                 $image_data = $page_images[$placeholder];
                                 $wp_url = is_array($image_data) ? $image_data['url'] : $image_data;
-                                $json_content = str_replace('{{' . $placeholder . '}}', $wp_url, $json_content);
+                                $attachment_id = is_array($image_data) ? $image_data['attachment_id'] : null;
+                                
+                                // 使用新的智能替換函數同時處理 URL 和 ID
+                                $json_content = replaceImagePlaceholderWithId($json_content, $placeholder, $wp_url, $attachment_id, $deployer);
                                 $replacement_count++;
-                                $deployer->log("    ✅ 替換圖片佔位符: {{$placeholder}} -> $wp_url (來源頁面: $page_name)");
+                                $deployer->log("    ✅ 替換圖片佔位符: {{$placeholder}} -> $wp_url" . ($attachment_id ? " (ID: $attachment_id)" : "") . " (來源頁面: $page_name)");
                                 $image_replaced = true;
                                 break;
                             }
@@ -509,4 +521,114 @@ function replaceElementorImageObject($image_object, $image_mapping, &$replacemen
     
     // 沒有找到匹配，返回原始對象
     return $image_object;
+}
+
+/**
+ * 智能替換圖片佔位符，同時處理 URL 和對應的 ID
+ */
+function replaceImagePlaceholderWithId($json_content, $placeholder, $wp_url, $attachment_id, $deployer) {
+    $placeholder_pattern = '{{' . $placeholder . '}}';
+    $updated_content = $json_content;
+    
+    // 如果有 attachment_id，先處理 ID 替換（在 URL 替換之前）
+    if ($attachment_id !== null) {
+        // 查找包含該佔位符的圖片對象模式
+        // 支援多種圖片欄位名稱: image, background_image, photo 等
+        $image_field_names = ['image', 'background_image', 'photo', 'logo', 'icon'];
+        $replaced = false;
+        
+        foreach ($image_field_names as $field_name) {
+            if ($replaced) break;
+            
+            // 查找包含佔位符的圖片對象模式
+            $pattern = '/"' . $field_name . '"\s*:\s*\{[^}]*"url"\s*:\s*"' . preg_quote($placeholder_pattern, '/') . '"[^}]*\}/';
+            
+            if (preg_match($pattern, $updated_content, $matches)) {
+                $old_image_object = $matches[0];
+                
+                // 在匹配到的圖片對象內查找並替換 ID
+                if (preg_match('/"id"\s*:\s*\d+/', $old_image_object)) {
+                    $new_image_object = preg_replace('/"id"\s*:\s*\d+/', '"id":' . intval($attachment_id), $old_image_object);
+                    $updated_content = str_replace($old_image_object, $new_image_object, $updated_content);
+                    
+                    $deployer->log("      🔄 同時替換圖片 ID: $attachment_id (" . $field_name . "格式)");
+                    $replaced = true;
+                } else {
+                    // 如果圖片對象中沒有 ID 欄位，需要添加 ID
+                    // 在 URL 欄位後面添加 ID
+                    $new_image_object = preg_replace(
+                        '/("url"\s*:\s*"' . preg_quote($placeholder_pattern, '/') . '")/',
+                        '$1,"id":' . intval($attachment_id),
+                        $old_image_object
+                    );
+                    $updated_content = str_replace($old_image_object, $new_image_object, $updated_content);
+                    
+                    $deployer->log("      🔄 添加圖片 ID: $attachment_id (" . $field_name . "格式)");
+                    $replaced = true;
+                }
+            }
+        }
+        
+        if (!$replaced) {
+            // 嘗試通用的圖片對象格式 (沒有欄位名稱前綴)
+            $general_pattern = '/\{[^}]*"url"\s*:\s*"' . preg_quote($placeholder_pattern, '/') . '"[^}]*\}/';
+            
+            if (preg_match($general_pattern, $updated_content, $general_matches)) {
+                $old_image_object = $general_matches[0];
+                
+                // 在匹配到的圖片對象內查找並替換 ID
+                if (preg_match('/"id"\s*:\s*\d+/', $old_image_object)) {
+                    $new_image_object = preg_replace('/"id"\s*:\s*\d+/', '"id":' . intval($attachment_id), $old_image_object);
+                    $updated_content = str_replace($old_image_object, $new_image_object, $updated_content);
+                    
+                    $deployer->log("      🔄 同時替換圖片 ID: $attachment_id (通用格式)");
+                    $replaced = true;
+                } else {
+                    // 如果圖片對象中沒有 ID 欄位，需要添加 ID
+                    $new_image_object = preg_replace(
+                        '/("url"\s*:\s*"' . preg_quote($placeholder_pattern, '/') . '")/',
+                        '$1,"id":' . intval($attachment_id),
+                        $old_image_object
+                    );
+                    $updated_content = str_replace($old_image_object, $new_image_object, $updated_content);
+                    
+                    $deployer->log("      🔄 添加圖片 ID: $attachment_id (通用格式)");
+                    $replaced = true;
+                }
+            }
+            
+            if (!$replaced) {
+                // 如果沒有找到完整的圖片對象，嘗試在附近查找並替換 id
+                // 這是一個更寬鬆的匹配，查找 URL 前後的 id 欄位
+                $lines = explode("\n", $updated_content);
+                $url_line_index = -1;
+                
+                // 找到包含 URL 的行
+                for ($i = 0; $i < count($lines); $i++) {
+                    if (strpos($lines[$i], '"url":"' . $wp_url . '"') !== false) {
+                        $url_line_index = $i;
+                        break;
+                    }
+                }
+                
+                if ($url_line_index !== -1) {
+                    // 在 URL 行的前後幾行查找 id 欄位
+                    $search_range = 5; // 搜索前後 5 行
+                    for ($i = max(0, $url_line_index - $search_range); $i <= min(count($lines) - 1, $url_line_index + $search_range); $i++) {
+                        if (preg_match('/"id"\s*:\s*\d+/', $lines[$i])) {
+                            $lines[$i] = preg_replace('/"id"\s*:\s*\d+/', '"id":' . intval($attachment_id), $lines[$i]);
+                            $updated_content = implode("\n", $lines);
+                            $deployer->log("      🔄 鄰近替換圖片 ID: $attachment_id");
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 最後進行 URL 替換
+    $updated_content = str_replace($placeholder_pattern, $wp_url, $updated_content);
+    
+    return $updated_content;
 }

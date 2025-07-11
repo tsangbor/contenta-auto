@@ -234,6 +234,185 @@ function call_openai_api($prompt, $model = 'gpt-4o-mini', $max_tokens = 2000, $a
 }
 
 /**
+ * 整合多服務圖片生成（參考 step-10）
+ */
+function generate_featured_image($prompt, $size = '1024x1024', $quality = 'standard', $preferred_service = 'openai') {
+    global $deployer;
+    
+    // 載入部署配置
+    $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+    if (!file_exists($deploy_config_file)) {
+        $deployer->log("錯誤: deploy-config.json 不存在");
+        return ['success' => false, 'error' => 'deploy-config.json 不存在'];
+    }
+    
+    $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+    $api_credentials = $deploy_config['api_credentials'] ?? [];
+    
+    // 設定服務優先順序
+    $services = [];
+    if ($preferred_service === 'ideogram' && !empty($api_credentials['ideogram']['api_key'])) {
+        $services[] = 'ideogram';
+    }
+    if (!empty($api_credentials['openai']['api_key'])) {
+        $services[] = 'openai';
+    }
+    
+    // 逐一嘗試服務
+    foreach ($services as $service) {
+        $deployer->log("嘗試使用 {$service} 生成圖片...");
+        
+        try {
+            $result = null;
+            
+            switch ($service) {
+                case 'ideogram':
+                    // 針對 Ideogram 添加重試機制
+                    $max_retries = 2;
+                    for ($retry = 0; $retry <= $max_retries; $retry++) {
+                        try {
+                            if ($retry > 0) {
+                                $deployer->log("Ideogram 重試第 {$retry} 次 (共 {$max_retries} 次)...");
+                                sleep(2); // 等待 2 秒再重試
+                            }
+                            $result = generate_ideogram_image($prompt, $size, $quality, $api_credentials['ideogram']);
+                            break; // 成功就跳出重試循環
+                        } catch (Exception $e) {
+                            if ($retry < $max_retries) {
+                                $deployer->log("Ideogram 第 " . ($retry + 1) . " 次嘗試失敗: " . $e->getMessage());
+                            } else {
+                                throw $e; // 最後一次嘗試失敗，拋出異常
+                            }
+                        }
+                    }
+                    break;
+                case 'openai':
+                    $result = generate_dalle_image($prompt, $size, $quality, $api_credentials['openai']['api_key']);
+                    break;
+            }
+            
+            if ($result && $result['success']) {
+                $deployer->log("使用 {$service} 成功生成圖片");
+                return $result;
+            }
+            
+        } catch (Exception $e) {
+            $deployer->log("使用 {$service} 失敗: " . $e->getMessage());
+        }
+    }
+    
+    return ['success' => false, 'error' => '所有圖片生成服務都失敗'];
+}
+
+/**
+ * 生成 Ideogram 圖片（從 step-10 複製）
+ */
+function generate_ideogram_image($prompt, $size, $quality, $ideogram_config) {
+    global $deployer;
+    
+    $api_key = $ideogram_config['api_key'] ?? '';
+    if (empty($api_key)) {
+        throw new Exception("Ideogram API 金鑰未設定");
+    }
+    
+    // 調試：檢查 API 金鑰
+    $deployer->log("Ideogram API 金鑰長度: " . strlen($api_key));
+    $deployer->log("Ideogram API 金鑰前綴: " . substr($api_key, 0, 20) . "...");
+    $deployer->log("Ideogram API 金鑰後綴: ..." . substr($api_key, -10));
+    
+    // 轉換尺寸格式為 Ideogram API 接受的格式
+    $aspect_ratio = '1x1'; // 預設 1:1
+    
+    // 解析尺寸字串 (例如: "1312x736")
+    if (preg_match('/(\d+)x(\d+)/', $size, $matches)) {
+        $width = intval($matches[1]);
+        $height = intval($matches[2]);
+        $ratio = $width / $height;
+        
+        // 根據比例映射到 Ideogram 支援的長寬比
+        if (abs($ratio - 16/9) < 0.1) {
+            $aspect_ratio = '16x9';
+        } elseif (abs($ratio - 9/16) < 0.1) {
+            $aspect_ratio = '9x16';
+        } elseif (abs($ratio - 4/3) < 0.1) {
+            $aspect_ratio = '4x3';
+        } elseif (abs($ratio - 3/4) < 0.1) {
+            $aspect_ratio = '3x4';
+        } elseif (abs($ratio - 16/10) < 0.1) {
+            $aspect_ratio = '16x10';
+        } elseif (abs($ratio - 1) < 0.1) {
+            $aspect_ratio = '1x1';
+        }
+    }
+    
+    $url = 'https://api.ideogram.ai/v1/ideogram-v3/generate';
+    $rendering_speed = $quality === 'high' ? 'DEFAULT' : 'TURBO';
+    
+    // 準備 multipart form data
+    $boundary = uniqid();
+    $delimiter = '-------------' . $boundary;
+    
+    $post_data = '';
+    
+    // Add prompt
+    $post_data .= "--" . $delimiter . "\r\n";
+    $post_data .= 'Content-Disposition: form-data; name="prompt"' . "\r\n\r\n";
+    $post_data .= $prompt . "\r\n";
+    
+    // Add aspect_ratio
+    $post_data .= "--" . $delimiter . "\r\n";
+    $post_data .= 'Content-Disposition: form-data; name="aspect_ratio"' . "\r\n\r\n";
+    $post_data .= $aspect_ratio . "\r\n";
+    
+    // Add rendering_speed
+    $post_data .= "--" . $delimiter . "\r\n";
+    $post_data .= 'Content-Disposition: form-data; name="rendering_speed"' . "\r\n\r\n";
+    $post_data .= $rendering_speed . "\r\n";
+    
+    // Close the boundary
+    $post_data .= "--" . $delimiter . "--\r\n";
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Api-Key: ' . $api_key,
+        'Content-Type: multipart/form-data; boundary=' . $delimiter,
+        'Content-Length: ' . strlen($post_data)
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    
+    if (curl_error($ch)) {
+        $error = curl_error($ch);
+        curl_close($ch);
+        throw new Exception("Ideogram API CURL 錯誤: " . $error);
+    }
+    
+    curl_close($ch);
+    
+    if ($http_code !== 200) {
+        throw new Exception("Ideogram API 呼叫失敗: HTTP {$http_code}, Response: " . $response);
+    }
+    
+    $response_data = json_decode($response, true);
+    
+    if (!$response_data || !isset($response_data['data'][0]['url'])) {
+        throw new Exception("Ideogram API 回應格式錯誤: " . $response);
+    }
+    
+    return [
+        'success' => true,
+        'url' => $response_data['data'][0]['url'],
+        'service' => 'ideogram'
+    ];
+}
+
+/**
  * 生成 DALL-E 3 圖片
  */
 function generate_dalle_image($prompt, $size = '1024x1024', $quality = 'standard', $api_key = null) {
@@ -384,7 +563,8 @@ foreach ($prompts as $index => $article_prompt) {
         // 15.3 生成精選圖片實體
         $deployer->log("  15.3 生成精選圖片...");
         
-        $image_result = generate_dalle_image($image_prompt, '1024x1024', 'standard', $openai_api_key);
+        // 使用整合的多服務圖片生成，優先使用 Ideogram
+        $image_result = generate_featured_image($image_prompt, '1024x1024', 'standard', 'ideogram');
         
         if (!$image_result['success']) {
             throw new Exception("圖片生成失敗: " . $image_result['error']);
@@ -464,13 +644,42 @@ foreach ($prompts as $index => $article_prompt) {
         // 15.5 關聯精選圖片
         $deployer->log("  15.5 設定精選圖片...");
         
-        $featured_result = $wp_cli->set_featured_image($post_id, $attachment_id);
+        // 添加延遲以確保文章完全提交到數據庫
+        sleep(3);
         
-        if ($featured_result['return_code'] !== 0) {
-            throw new Exception("精選圖片設定失敗: " . $featured_result['output']);
+        // 添加文章存在性驗證和重試機制
+        $max_retries = 3;
+        $featured_success = false;
+        
+        for ($retry = 0; $retry < $max_retries; $retry++) {
+            // 首先驗證文章是否存在
+            $verify_result = $wp_cli->execute("post get {$post_id} --field=ID");
+            
+            if ($verify_result['return_code'] === 0) {
+                // 文章存在，嘗試設定精選圖片
+                $deployer->log("    嘗試設定精選圖片 (第 " . ($retry + 1) . " 次)");
+                $featured_result = $wp_cli->set_featured_image($post_id, $attachment_id);
+                
+                if ($featured_result['return_code'] === 0) {
+                    $featured_success = true;
+                    $deployer->log("  精選圖片設定完成");
+                    break;
+                } else {
+                    $deployer->log("    精選圖片設定失敗: " . $featured_result['output']);
+                }
+            } else {
+                $deployer->log("    文章 ID {$post_id} 尚未在數據庫中找到，等待...");
+            }
+            
+            // 如果不是最後一次重試，等待後再試
+            if ($retry < $max_retries - 1) {
+                sleep(2);
+            }
         }
         
-        $deployer->log("  精選圖片設定完成");
+        if (!$featured_success) {
+            throw new Exception("精選圖片設定失敗: 經過 {$max_retries} 次重試仍無法設定精選圖片");
+        }
         
         // 清理本地圖片檔案
         if (file_exists($local_image_path)) {

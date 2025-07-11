@@ -186,7 +186,7 @@ function generateImagePrompts($placeholders, $site_config, $ai_service, $config,
     \"key1\": {
         \"prompt\": \"詳細英文提示詞\",
         \"style\": \"攝影風格如 professional/abstract/minimalist\",
-        \"size\": \"1024x1024\",
+        \"size\": \"根據圖片類型選擇適當尺寸：背景圖(_BG)使用1312x736(16:9)，人像照片(_PHOTO)使用1024x1024(1:1)，圖示(_ICON)使用1024x1024(1:1)，標誌(_LOGO)使用1280x800(16:10)\",
         \"quality\": \"high\"
     }
 }
@@ -236,24 +236,29 @@ function generateDefaultImagePrompts($placeholders)
         if (strpos($placeholder, '_BG') !== false) {
             $prompt = "Abstract background image, professional design, soft gradient colors, modern minimalist style";
             $style = "abstract";
+            $size = "1312x736"; // 16:9 適合背景圖
         } elseif (strpos($placeholder, '_PHOTO') !== false) {
             $prompt = "Professional portrait photography, natural lighting, warm atmosphere, business casual";
             $style = "professional";
+            $size = "1024x1024"; // 1:1 適合人像照片
         } elseif (strpos($placeholder, '_LOGO') !== false) {
             $prompt = "Minimalist logo design, clean simple shapes, professional brand identity, transparent background";
             $style = "minimalist";
+            $size = "1280x800"; // 16:10 適合標誌
         } elseif (strpos($placeholder, '_ICON') !== false) {
             $prompt = "Simple icon design, line art style, professional clean, minimalist";
             $style = "minimalist";
+            $size = "1024x1024"; // 1:1 適合圖示
         } else {
             $prompt = "Professional image, high quality, modern design, clean composition";
             $style = "professional";
+            $size = "1024x1024"; // 預設 1:1
         }
         
         $prompts[$key] = [
             'prompt' => $prompt,
             'style' => $style,
-            'size' => '1024x1024',
+            'size' => $size,
             'quality' => 'high'
         ];
     }
@@ -282,11 +287,15 @@ function generateImages($image_prompts, $images_dir, $ai_service, $config, $depl
         'base_url' => 'https://generativelanguage.googleapis.com/v1beta/models/'
     ];
     
+    $ideogram_config = [
+        'api_key' => $config->get('api_credentials.ideogram.api_key')
+    ];
+    
     foreach ($image_prompts as $key => $prompt_config) {
         $deployer->log("生成圖片: $key");
         
         try {
-            $filename = generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $openai_config, $gemini_config, $deployer);
+            $filename = generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $openai_config, $gemini_config, $ideogram_config, $deployer);
             
             if ($filename) {
                 $generated_images[$key] = $filename;
@@ -313,22 +322,62 @@ function generateImages($image_prompts, $images_dir, $ai_service, $config, $depl
 /**
  * 生成單張圖片
  */
-function generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $openai_config, $gemini_config, $deployer)
+function generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $openai_config, $gemini_config, $ideogram_config, $deployer)
 {
     $prompt = $prompt_config['prompt'];
     $size = $prompt_config['size'] ?? '1024x1024';
     $quality = $prompt_config['quality'] ?? 'standard';
     
-    // 直接使用 OpenAI (Gemini 圖片生成不穩定)
-    $image_data = generateImageWithOpenAI($prompt, $size, $quality, $openai_config, $deployer);
+    // 取得 ConfigManager 實例
+    $config = ConfigManager::getInstance();
     
-    // 只有在 OpenAI 失敗且 AI 服務設定為 gemini 時才嘗試 Gemini
-    if (!$image_data && $ai_service === 'gemini') {
-        $deployer->log("🔄 OpenAI 失敗，嘗試 Gemini");
-        $image_data = generateImageWithGemini($prompt, $size, $quality, $gemini_config, $deployer);
+    // 取得 AI 圖片生成設定
+    $primary_service = $config->get('ai_image_generation.primary_service', 'openai');
+    $fallback_order = $config->get('ai_image_generation.fallback_order', ['openai', 'ideogram', 'gemini']);
+    
+    $deployer->log("使用圖片生成服務順序: " . implode(' → ', $fallback_order));
+    
+    $image_data = null;
+    
+    // 根據設定的順序嘗試不同的服務
+    foreach ($fallback_order as $service) {
+        if ($image_data) break; // 如果已成功生成，跳出迴圈
+        
+        switch ($service) {
+            case 'openai':
+                if (isset($openai_config['api_key']) && !empty($openai_config['api_key'])) {
+                    $deployer->log("嘗試使用 OpenAI 生成圖片");
+                    $image_data = generateImageWithOpenAI($prompt, $size, $quality, $openai_config, $deployer);
+                    if (!$image_data && count($fallback_order) > 1) {
+                        $deployer->log("🔄 OpenAI 失敗");
+                    }
+                }
+                break;
+                
+            case 'ideogram':
+                if (isset($ideogram_config['api_key']) && !empty($ideogram_config['api_key'])) {
+                    $deployer->log("嘗試使用 Ideogram 生成圖片");
+                    $image_data = generateImageWithIdeogram($prompt, $size, $quality, $ideogram_config, $deployer);
+                    if (!$image_data && count($fallback_order) > 1) {
+                        $deployer->log("🔄 Ideogram 失敗");
+                    }
+                }
+                break;
+                
+            case 'gemini':
+                if (isset($gemini_config['api_key']) && !empty($gemini_config['api_key'])) {
+                    $deployer->log("嘗試使用 Gemini 生成圖片");
+                    $image_data = generateImageWithGemini($prompt, $size, $quality, $gemini_config, $deployer);
+                    if (!$image_data && count($fallback_order) > 1) {
+                        $deployer->log("🔄 Gemini 失敗");
+                    }
+                }
+                break;
+        }
     }
     
     if (!$image_data) {
+        $deployer->log("❌ 所有圖片生成服務都失敗");
         return null;
     }
     
@@ -348,7 +397,12 @@ function generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $op
  */
 function generateImageWithGemini($prompt, $size, $quality, $gemini_config, $deployer)
 {
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent';
+    $base_url = $gemini_config['base_url'] ?? 'https://generativelanguage.googleapis.com/v1beta/models/';
+    $model = $gemini_config['model'] ?? 'gemini-2.0-flash-preview-image-generation';
+    $api_key = $gemini_config['api_key'] ?? '';
+    
+    // 使用與 step-08 相同的 URL 構建方式
+    $url = rtrim($base_url, '/') . '/' . $model . ':generateContent?key=' . $api_key;
     
     $data = [
         'contents' => [
@@ -373,6 +427,18 @@ function generateImageWithGemini($prompt, $size, $quality, $gemini_config, $depl
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 300);
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    
+    // 載入部署配置以檢查代理設定
+    $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+    if (file_exists($deploy_config_file)) {
+        $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+        // 檢查是否需要使用代理
+        if (isset($deploy_config['network']['use_proxy']) && 
+            $deploy_config['network']['use_proxy'] === true && 
+            !empty($deploy_config['network']['proxy'])) {
+            curl_setopt($ch, CURLOPT_PROXY, $deploy_config['network']['proxy']);
+        }
+    }
     
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -421,6 +487,18 @@ function generateImageWithOpenAI($prompt, $size, $quality, $openai_config, $depl
         'Authorization: Bearer ' . $openai_config['api_key']
     ]);
     
+    // 載入部署配置以檢查代理設定
+    $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+    if (file_exists($deploy_config_file)) {
+        $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+        // 檢查是否需要使用代理
+        if (isset($deploy_config['network']['use_proxy']) && 
+            $deploy_config['network']['use_proxy'] === true && 
+            !empty($deploy_config['network']['proxy'])) {
+            curl_setopt($ch, CURLOPT_PROXY, $deploy_config['network']['proxy']);
+        }
+    }
+    
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -433,6 +511,139 @@ function generateImageWithOpenAI($prompt, $size, $quality, $openai_config, $depl
     }
     
     $deployer->log("OpenAI 圖片生成失敗: HTTP $http_code");
+    return null;
+}
+
+/**
+ * 使用 Ideogram API 生成圖片
+ */
+function generateImageWithIdeogram($prompt, $size, $quality, $ideogram_config, $deployer)
+{
+    $url = 'https://api.ideogram.ai/v1/ideogram-v3/generate';
+    
+    // 轉換尺寸格式為 Ideogram API 接受的格式
+    $aspect_ratio = '1x1'; // 預設 1:1
+    
+    // 解析尺寸字串 (例如: "1312x736")
+    if (preg_match('/(\d+)x(\d+)/', $size, $matches)) {
+        $width = intval($matches[1]);
+        $height = intval($matches[2]);
+        $ratio = $width / $height;
+        
+        // 根據比例映射到 Ideogram 支援的長寬比
+        if (abs($ratio - 16/9) < 0.1) {
+            $aspect_ratio = '16x9'; // 16:9 (1312x736, 1920x1080)
+        } elseif (abs($ratio - 9/16) < 0.1) {
+            $aspect_ratio = '9x16'; // 9:16 (736x1312)
+        } elseif (abs($ratio - 4/3) < 0.1) {
+            $aspect_ratio = '4x3'; // 4:3 (1152x864)
+        } elseif (abs($ratio - 3/4) < 0.1) {
+            $aspect_ratio = '3x4'; // 3:4 (864x1152)
+        } elseif (abs($ratio - 16/10) < 0.1) {
+            $aspect_ratio = '16x10'; // 16:10 (1280x800)
+        } elseif (abs($ratio - 10/16) < 0.1) {
+            $aspect_ratio = '10x16'; // 10:16 (800x1280)
+        } elseif (abs($ratio - 3/2) < 0.1) {
+            $aspect_ratio = '3x2'; // 3:2 (1248x832)
+        } elseif (abs($ratio - 2/3) < 0.1) {
+            $aspect_ratio = '2x3'; // 2:3 (832x1248)
+        } elseif (abs($ratio - 1) < 0.1) {
+            $aspect_ratio = '1x1'; // 1:1 (1024x1024)
+        } else {
+            // 未知比例，使用最接近的標準比例
+            if ($ratio > 1.6) {
+                $aspect_ratio = '16x9'; // 寬圖片
+            } elseif ($ratio > 1.2) {
+                $aspect_ratio = '4x3'; // 中等寬度
+            } elseif ($ratio > 0.8) {
+                $aspect_ratio = '1x1'; // 接近正方形
+            } else {
+                $aspect_ratio = '9x16'; // 長圖片
+            }
+        }
+    }
+    
+    // 設定渲染速度
+    $rendering_speed = $quality === 'high' ? 'DEFAULT' : 'TURBO';
+    
+    // 準備 multipart form data
+    $boundary = uniqid();
+    $delimiter = '-------------' . $boundary;
+    
+    $post_data = '';
+    
+    // 添加 prompt
+    $post_data .= "--{$delimiter}\r\n";
+    $post_data .= 'Content-Disposition: form-data; name="prompt"' . "\r\n\r\n";
+    $post_data .= $prompt . "\r\n";
+    
+    // 添加 aspect_ratio
+    $post_data .= "--{$delimiter}\r\n";
+    $post_data .= 'Content-Disposition: form-data; name="aspect_ratio"' . "\r\n\r\n";
+    $post_data .= $aspect_ratio . "\r\n";
+    
+    // 添加 rendering_speed
+    $post_data .= "--{$delimiter}\r\n";
+    $post_data .= 'Content-Disposition: form-data; name="rendering_speed"' . "\r\n\r\n";
+    $post_data .= $rendering_speed . "\r\n";
+    
+    // 添加 style_type
+    $post_data .= "--{$delimiter}\r\n";
+    $post_data .= 'Content-Disposition: form-data; name="style_type"' . "\r\n\r\n";
+    $post_data .= "GENERAL\r\n";
+    
+    // 添加 magic_prompt
+    $post_data .= "--{$delimiter}\r\n";
+    $post_data .= 'Content-Disposition: form-data; name="magic_prompt"' . "\r\n\r\n";
+    $post_data .= "ON\r\n";
+    
+    // 添加 num_images
+    $post_data .= "--{$delimiter}\r\n";
+    $post_data .= 'Content-Disposition: form-data; name="num_images"' . "\r\n\r\n";
+    $post_data .= "1\r\n";
+    
+    $post_data .= "--{$delimiter}--\r\n";
+    
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_data);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 300);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Api-Key: ' . $ideogram_config['api_key'],
+        'Content-Type: multipart/form-data; boundary=' . $delimiter,
+        'Content-Length: ' . strlen($post_data)
+    ]);
+    
+    // 載入部署配置以檢查代理設定
+    $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+    if (file_exists($deploy_config_file)) {
+        $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+        // 檢查是否需要使用代理
+        if (isset($deploy_config['network']['use_proxy']) && 
+            $deploy_config['network']['use_proxy'] === true && 
+            !empty($deploy_config['network']['proxy'])) {
+            curl_setopt($ch, CURLOPT_PROXY, $deploy_config['network']['proxy']);
+        }
+    }
+    
+    $response = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    
+    if ($http_code === 200) {
+        $result = json_decode($response, true);
+        if (isset($result['data'][0]['url'])) {
+            $deployer->log("Ideogram 圖片生成成功");
+            return $result['data'][0]['url'];
+        }
+    }
+    
+    $deployer->log("Ideogram 圖片生成失敗: HTTP $http_code");
+    if ($response) {
+        $deployer->log("Ideogram 錯誤回應: " . substr($response, 0, 500));
+    }
     return null;
 }
 
@@ -453,6 +664,18 @@ function saveImageData($image_data, $file_path, $deployer)
             curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
             curl_setopt($ch, CURLOPT_TIMEOUT, 60);
             curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            
+            // 載入部署配置以檢查代理設定
+            $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+            if (file_exists($deploy_config_file)) {
+                $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+                // 檢查是否需要使用代理
+                if (isset($deploy_config['network']['use_proxy']) && 
+                    $deploy_config['network']['use_proxy'] === true && 
+                    !empty($deploy_config['network']['proxy'])) {
+                    curl_setopt($ch, CURLOPT_PROXY, $deploy_config['network']['proxy']);
+                }
+            }
             $binary_data = curl_exec($ch);
             $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
             curl_close($ch);
@@ -512,9 +735,11 @@ function buildImageMapping($generated_images, $placeholders, $deployer)
 function callGeminiAPI($prompt, $config, $deployer)
 {
     $api_key = $config->get('api_credentials.gemini.api_key');
-    $model = 'gemini-2.0-flash-exp';
+    $model = $config->get('api_credentials.gemini.model') ?? 'gemini-2.0-flash-exp';
+    $base_url = $config->get('api_credentials.gemini.base_url') ?? 'https://generativelanguage.googleapis.com/v1beta/models/';
     
-    $url = "https://generativelanguage.googleapis.com/v1beta/models/{$model}:generateContent?key={$api_key}";
+    // 使用與 step-08 相同的 URL 構建方式
+    $url = rtrim($base_url, '/') . '/' . $model . ':generateContent?key=' . $api_key;
     
     $data = [
         'contents' => [
@@ -538,6 +763,18 @@ function callGeminiAPI($prompt, $config, $deployer)
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 180);
     curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+    
+    // 載入部署配置以檢查代理設定
+    $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+    if (file_exists($deploy_config_file)) {
+        $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+        // 檢查是否需要使用代理
+        if (isset($deploy_config['network']['use_proxy']) && 
+            $deploy_config['network']['use_proxy'] === true && 
+            !empty($deploy_config['network']['proxy'])) {
+            curl_setopt($ch, CURLOPT_PROXY, $deploy_config['network']['proxy']);
+        }
+    }
     
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -582,6 +819,18 @@ function callOpenAIAPI($prompt, $config, $deployer)
         'Content-Type: application/json',
         'Authorization: Bearer ' . $api_key
     ]);
+    
+    // 載入部署配置以檢查代理設定
+    $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+    if (file_exists($deploy_config_file)) {
+        $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+        // 檢查是否需要使用代理
+        if (isset($deploy_config['network']['use_proxy']) && 
+            $deploy_config['network']['use_proxy'] === true && 
+            !empty($deploy_config['network']['proxy'])) {
+            curl_setopt($ch, CURLOPT_PROXY, $deploy_config['network']['proxy']);
+        }
+    }
     
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

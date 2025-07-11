@@ -1,14 +1,226 @@
 <?php
 /**
- * @file theme-default-settings.php
- * @description 主題預設參數註冊系統 + Elementor 動態標籤支援 + GPT 三組佈局方案
- * @features 支援：預設值設定、JSON 匯入、資料清除、GPT 佈局選擇、Elementor 動態標籤
+ * 主題預設參數註冊系統
+ * 
+ * 提供主題預設參數管理、JSON 匯入、GPT 佈局選擇、Elementor 動態標籤支援
+ * 包含完整的資料管理和 WordPress 系統設定同步功能
+ * 
+ * @package HelloElementorChild
+ * @subpackage Modules/ThemeDefaultSettings
+ * @version 1.0.1
+ * @since 2.0.0
+ * @author Your Name
+ * 
+ * === WP-CLI JSON 設定管理指令使用指南 ===
+ * 
+ * 本模組主要透過 WordPress 管理介面操作，但提供以下 WP-CLI 指令來檢查和管理設定：
+ * 
+ * 🔍 檢查和查看指令：
+ * 
+ * 1. 📋 檢查所有主題設定值
+ *    wp option list --search="index_*" --allow-root
+ *    wp option list --search="website_*" --allow-root
+ *    wp option list --search="seo_*" --allow-root
+ *    # 列出所有主題相關的設定選項
+ * 
+ * 2. 🔍 查看特定設定值
+ *    wp option get index_hero_title --allow-root
+ *    wp option get index_service_list --allow-root
+ *    wp option get layout_selection --allow-root
+ *    # 查看個別設定項目的值
+ * 
+ * 3. 📊 檢查佈局決策狀態
+ *    wp option get last_layout_decision --allow-root
+ *    wp option get layout_reasoning --allow-root
+ *    wp option get selected_layout_option --allow-root
+ *    # 查看 GPT 佈局選擇的相關資料
+ * 
+ * 🛠️ 設定管理指令：
+ * 
+ * 4. ✏️ 更新個別設定
+ *    wp option update index_hero_title "新的標題" --allow-root
+ *    wp option update website_blogname "新的網站名稱" --allow-root
+ *    wp option update website_author_nickname "新暱稱" --allow-root
+ *    # 手動更新特定設定值
+ * 
+ * 5. 🧹 清除特定設定
+ *    wp option delete index_hero_title --allow-root
+ *    wp option delete layout_selection --allow-root
+ *    wp option delete last_layout_decision --allow-root
+ *    # 刪除特定設定項目
+ * 
+ * 6. 🔄 重置所有主題設定為預設值
+ *    wp option delete index_hero_title index_hero_subtitle index_hero_content index_about_title index_service_list layout_selection layout_reasoning --allow-root
+ *    # 批次刪除多個設定項目
+ * 
+ * 🗄️ 資料庫操作指令：
+ * 
+ * 7. 💾 備份主題設定到 JSON 檔案
+ *    wp option list --search="index_*" --format=json --allow-root > theme-settings-backup.json
+ *    wp option list --search="layout_*" --format=json --allow-root > layout-settings-backup.json
+ *    # 將設定匯出為 JSON 檔案備份
+ * 
+ * 8. 🔍 檢查服務列表結構
+ *    wp option get index_service_list --format=json --allow-root
+ *    # 以 JSON 格式查看服務列表的完整結構
+ * 
+ * 9. 📈 檢查 WordPress 系統設定同步狀態
+ *    wp option get blogname --allow-root
+ *    wp option get blogdescription --allow-root
+ *    wp user meta get 1 nickname --allow-root
+ *    wp user meta get 1 description --allow-root
+ *    # 檢查與 WordPress 核心設定的同步狀態
+ * 
+ * === 主要設定項目列表 ===
+ * 
+ * 🎯 Hero 區塊設定：
+ * • index_hero_bg        - Hero 背景圖片 URL
+ * • index_hero_photo     - Hero 人物照片 URL
+ * • index_hero_title     - Hero 主標題
+ * • index_hero_subtitle  - Hero 副標題
+ * • index_hero_cta_text  - Hero CTA 按鈕文字
+ * • index_hero_cta_link  - Hero CTA 按鈕連結
+ * 
+ * 👤 關於我區塊設定：
+ * • index_about_title    - 關於我標題
+ * • index_about_subtitle - 關於我副標題
+ * • index_about_content  - 關於我內容
+ * • index_about_photo    - 關於我照片 URL
+ * • index_about_cta_text - 關於我 CTA 文字
+ * • index_about_cta_link - 關於我 CTA 連結
+ * 
+ * 🛠️ 服務項目設定：
+ * • index_service_title    - 服務區塊標題
+ * • index_service_subtitle - 服務區塊副標題
+ * • index_service_list     - 服務項目陣列（JSON 格式）
+ * • index_service_cta_text - 服務 CTA 文字
+ * • index_service_cta_link - 服務 CTA 連結
+ * 
+ * 🦶 頁尾設定：
+ * • index_footer_title     - 頁尾標題
+ * • index_footer_subtitle  - 頁尾副標題
+ * • index_footer_fb        - Facebook 連結
+ * • index_footer_ig        - Instagram 連結
+ * • index_footer_line      - LINE 連結
+ * • index_footer_yt        - YouTube 連結
+ * • index_footer_email     - Email 聯絡方式
+ * 
+ * 🎨 佈局管理設定：
+ * • layout_selection       - GPT 選擇的佈局組合
+ * • layout_reasoning       - 每個佈局的選擇理由
+ * • last_layout_decision   - 最後的佈局決策記錄
+ * • selected_layout_option - 用戶手動選擇的佈局選項
+ * 
+ * 🌐 網站基本設定：
+ * • website_blogname         - 網站名稱（同步至 WordPress）
+ * • website_blogdescription  - 網站描述（同步至 WordPress）
+ * • website_author_nickname  - 作者暱稱（同步至用戶資料）
+ * • website_author_description - 作者描述（同步至用戶資料）
+ * 
+ * === JSON 匯入格式範例 ===
+ * 
+ * 完整的 JSON 設定檔案格式：
+ * {
+ *   "layout_selection": {
+ *     "header": "header001",
+ *     "hero": "hero002",
+ *     "about": "about001",
+ *     "service": "service002",
+ *     "archive": "archive001",
+ *     "footer": "footer001"
+ *   },
+ *   "layout_reasoning": {
+ *     "header": "簡約導航突出專業感",
+ *     "hero": "居中文字強調核心訊息"
+ *   },
+ *   "index_hero_title": "主標題",
+ *   "index_hero_subtitle": "副標題",
+ *   "index_service_list": [
+ *     {
+ *       "icon": "fas fa-lightbulb",
+ *       "title": "服務標題",
+ *       "description": "服務描述"
+ *     }
+ *   ],
+ *   "website_blogname": "網站名稱",
+ *   "website_author_nickname": "作者暱稱"
+ * }
+ * 
+ * === Elementor 動態標籤支援 ===
+ * 
+ * 本模組為 Elementor 提供以下動態標籤：
+ * • Theme Setting          - 一般文字設定
+ * • Theme Setting URL      - URL 連結設定
+ * • Theme Setting Image    - 圖片設定
+ * • Service List          - 服務項目列表
+ * • Service Icon          - 服務項目圖示
+ * • All Services HTML     - 完整服務列表 HTML
+ * 
+ * === 系統整合功能 ===
+ * 
+ * 自動同步機制：
+ * 1. website_blogname → WordPress blogname 選項
+ * 2. website_blogdescription → WordPress blogdescription 選項
+ * 3. website_author_nickname → 管理員用戶的 nickname 和 display_name
+ * 4. website_author_description → 管理員用戶的 description
+ * 
+ * === 管理介面功能 ===
+ * 
+ * 訪問管理介面：
+ * • WordPress 管理後台 → 外觀 → JSON設定匯入
+ * • 支援檔案上傳和直接文字輸入兩種 JSON 匯入方式
+ * • 提供 GPT 佈局選擇器（三選一或自動選擇）
+ * • 完整的資料清除和重置功能
+ * • 即時的系統狀態檢查和除錯工具
+ * 
+ * Features:
+ * - 主題預設參數註冊與管理
+ * - JSON 檔案/文字內容匯入
+ * - GPT 佈局方案選擇
+ * - Elementor 動態標籤整合
+ * - WordPress 系統設定同步
+ * - 完整的資料清除功能
+ * - 三組佈局方案支援
+ * - WP-CLI 指令支援
+ * 
+ * Changelog:
+ * 1.0.1 - 2025-07-07
+ * - 新增完整的 WP-CLI 指令使用指南
+ * - 詳細的設定項目和 JSON 格式說明
+ * - 系統整合功能和動態標籤文檔
+ * - 管理介面操作指引
+ * 
+ * 1.0.0 - 2025-01-06
+ * - 初始版本
+ * - 基本設定註冊功能
+ * - JSON 匯入系統
+ * - GPT 佈局選擇器
+ * - 動態標籤支援
+ * - 系統設定同步
+ * - 佈局決策記錄
+ * - 作者資料更新
+ * - 除錯工具整合
  */
 
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+/**
+ * ThemeDefaultSettings Class
+ * 
+ * 主要負責處理主題預設設定的管理功能
+ * 
+ * @since 2.0.0
+ * @version 1.0.0
+ */
 class ThemeDefaultSettings {
     
     /**
      * 預設參數配置 - 註冊時為空白，透過 JSON 匯入更新
+     * 
+     * @var array
+     * @since 1.0.0
      */
     private $default_settings = [
         'index_hero_bg' => '',
@@ -50,6 +262,11 @@ class ThemeDefaultSettings {
         'website_author_description' => ''
     ];
 
+    /**
+     * 建構函式
+     * 
+     * @since 1.0.0
+     */
     public function __construct() {
         add_action('init', [$this, 'register_theme_settings']);
         add_action('admin_menu', [$this, 'add_admin_menu']);
@@ -900,6 +1117,11 @@ class ThemeDefaultSettings {
      * 註冊 Elementor 動態標籤
      */
     public function register_elementor_dynamic_tags($dynamic_tags) {
+        // 檢查 Elementor 是否可用
+        if (!function_exists('is_elementor_available') || !is_elementor_available()) {
+            return;
+        }
+        
         if (class_exists('Elementor\Core\DynamicTags\Tag')) {
             $dynamic_tags_file = get_template_directory() . '/inc/elementor-dynamic-tags.php';
             

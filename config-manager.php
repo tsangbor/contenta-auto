@@ -82,7 +82,18 @@ class ConfigManager
                 'gemini' => [
                     'api_key' => '',
                     'model' => 'gemini-pro-vision'
+                ],
+                'ideogram' => [
+                    'api_key' => ''
                 ]
+            ],
+            
+            // AI 圖片生成設定
+            'ai_image_generation' => [
+                'primary_service' => 'openai', // 主要使用的服務: openai, ideogram, gemini
+                'fallback_order' => ['openai', 'ideogram', 'gemini'], // 備援順序
+                'quality' => 'high', // 圖片品質: standard, high
+                'style' => 'professional' // 圖片風格
             ],
             
             // 部署參數
@@ -208,6 +219,14 @@ class ConfigManager
         }
         
         return true;
+    }
+    
+    /**
+     * 重新載入配置
+     */
+    public function reload()
+    {
+        $this->loadConfig();
     }
     
     /**

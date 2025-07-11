@@ -379,6 +379,20 @@ class ContentResolver {
         ]);
         curl_setopt($ch, CURLOPT_TIMEOUT, 30);
         
+        // 載入部署配置以檢查代理設定
+        if (defined('DEPLOY_BASE_PATH')) {
+            $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+            if (file_exists($deploy_config_file)) {
+                $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+                // 檢查是否需要使用代理
+                if (isset($deploy_config['network']['use_proxy']) && 
+                    $deploy_config['network']['use_proxy'] === true && 
+                    !empty($deploy_config['network']['proxy'])) {
+                    curl_setopt($ch, CURLOPT_PROXY, $deploy_config['network']['proxy']);
+                }
+            }
+        }
+        
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         curl_close($ch);

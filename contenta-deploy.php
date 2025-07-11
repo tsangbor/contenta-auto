@@ -52,18 +52,23 @@ class ContentaDeployer
     private $start_step = '00';
     private $single_step = true; // 預設為單一步驟執行
     private $job_log_file;
+    public $ai_model = null; // 指定的 AI 模型
     
-    public function __construct($job_id, $start_step = '00', $single_step = true)
+    public function __construct($job_id, $start_step = '00', $single_step = true, $ai_model = null)
     {
         $this->job_id = $job_id;
         $this->start_step = $start_step;
         $this->single_step = $single_step;
+        $this->ai_model = $ai_model;
         $this->initializeJobLog();
         $this->loadJobData();
         $this->initializeSteps();
         $this->log("=== Contenta 部署系統啟動 ===");
         $this->log("Job ID: " . $this->job_id);
         $this->log("起始步驟: " . $this->start_step);
+        if ($this->ai_model) {
+            $this->log("指定 AI 模型: " . $this->ai_model);
+        }
     }
     
     /**
@@ -88,18 +93,38 @@ class ContentaDeployer
      */
     private function loadJobData()
     {
-        // 先檢查是否有 job_id 對應的 JSON 檔案
-        $job_file = DEPLOY_DATA_PATH . '/' . $this->job_id . '.json';
+        // 支援新的目錄結構：data/{job_id}/{job_id}.json
+        $job_dir = DEPLOY_DATA_PATH . '/' . $this->job_id;
+        $job_file = $job_dir . '/' . $this->job_id . '.json';
+        
+        // 檢查新的檔案位置
         if (file_exists($job_file)) {
             $this->job_data = json_decode(file_get_contents($job_file), true);
+            $this->log("從新位置載入 Job 資料: {$job_file}");
         } else {
-            // 如果沒有專用檔案，使用範例資料進行測試
-            $this->log("警告: 找不到 Job 資料檔案 {$job_file}，使用預設測試資料");
-            $this->job_data = $this->getDefaultJobData();
+            // 向後相容：檢查舊的檔案位置
+            $old_job_file = DEPLOY_DATA_PATH . '/' . $this->job_id . '.json';
+            if (file_exists($old_job_file)) {
+                $this->job_data = json_decode(file_get_contents($old_job_file), true);
+                $this->log("從舊位置載入 Job 資料: {$old_job_file}");
+            } else {
+                // 如果都沒有，使用範例資料進行測試
+                $this->log("警告: 找不到 Job 資料檔案，使用預設測試資料");
+                $this->log("  嘗試過的位置: ");
+                $this->log("  - {$job_file}");
+                $this->log("  - {$old_job_file}");
+                $this->job_data = $this->getDefaultJobData();
+            }
         }
         
         if (!$this->job_data) {
             throw new Exception("無法載入 Job 資料");
+        }
+        
+        // 設定 job 資料目錄路徑供後續使用
+        if (is_dir($job_dir)) {
+            $this->job_data['job_dir'] = $job_dir;
+            $this->log("Job 資料目錄: {$job_dir}");
         }
         
         $this->log("Job 資料載入成功");
@@ -286,17 +311,25 @@ class ContentaDeployer
 try {
     // 檢查參數
     if ($argc < 2) {
-        echo "使用方式: php contenta-deploy.php [job_id] [--step=XX] [--all]\n";
+        echo "使用方式: php contenta-deploy.php [job_id] [--step=XX] [--all] [--ai=MODEL]\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --step=00  (只執行步驟 00)\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --step=08  (只執行步驟 08)\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --all      (執行所有步驟)\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --step=08 --all  (從步驟 08 執行到最後)\n";
+        echo "例如: php contenta-deploy.php 2506290730-3450 --step=08 --ai=gemini  (使用 Gemini AI)\n";
+        echo "例如: php contenta-deploy.php 2506290730-3450 --step=08 --ai=openai  (使用 OpenAI)\n";
+        echo "\n";
+        echo "AI 模型選項:\n";
+        echo "  --ai=openai   使用 OpenAI 模型\n";
+        echo "  --ai=gemini   使用 Gemini 模型\n";
+        echo "  (無參數時使用配置檔案的預設設定)\n";
         exit(1);
     }
     
     $job_id = $argv[1];
     $start_step = '00'; // 預設從步驟 00 開始
     $single_step = true; // 預設只執行單一步驟
+    $ai_model = null; // 預設使用配置檔案設定
     
     // 處理命令列參數
     if ($argc >= 3) {
@@ -305,6 +338,13 @@ try {
                 $start_step = substr($arg, 7);
             } elseif ($arg === '--all') {
                 $single_step = false; // 執行所有步驟
+            } elseif (strpos($arg, '--ai=') === 0) {
+                $ai_model = substr($arg, 5);
+                // 驗證 AI 模型參數
+                if (!in_array($ai_model, ['openai', 'gemini'])) {
+                    echo "錯誤: AI 模型參數無效，支援的選項: openai, gemini\n";
+                    exit(1);
+                }
             }
         }
     }
@@ -329,7 +369,7 @@ try {
     }
     
     // 建立部署器並執行
-    $deployer = new ContentaDeployer($job_id, $start_step, $single_step);
+    $deployer = new ContentaDeployer($job_id, $start_step, $single_step, $ai_model);
     $deployer->deploy();
     
 } catch (Exception $e) {

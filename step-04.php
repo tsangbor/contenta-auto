@@ -4,6 +4,16 @@
  * 透過 BT Panel Let's Encrypt API 申請 SSL 憑證
  */
 
+// 載入必要的類別
+require_once DEPLOY_BASE_PATH . '/includes/class-auth-manager.php';
+
+// 確保認證可用
+$authManager = new AuthManager();
+if (!$authManager->ensureValidCredentials()) {
+    $deployer->log("認證失敗，無法執行 BT Panel 操作");
+    return ['status' => 'error', 'message' => '認證失敗'];
+}
+
 // 載入處理後的資料
 $work_dir = DEPLOY_BASE_PATH . '/temp/' . $job_id;
 $processed_data = json_decode(file_get_contents($work_dir . '/config/processed_data.json'), true);
@@ -161,8 +171,8 @@ function setupWordPressRewrite($domain, $site_name, $panel_url, $session_cookie,
 rewrite /wp-admin$ \$scheme://\$host\$uri/ permanent;";
     }
 
-    // 使用正確的檔案路徑和參數格式
-    $rewrite_file_path = "/www/server/panel/vhost/rewrite/{$site_name}.conf";
+    // 使用正確的檔案路徑和參數格式（使用網域名稱而非網站名稱）
+    $rewrite_file_path = "/www/server/panel/vhost/rewrite/www.{$domain}.conf";
     $deployer->log("偽靜態規則檔案路徑: {$rewrite_file_path}");
     
     $data = [

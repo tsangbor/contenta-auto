@@ -1,20 +1,231 @@
 <?php
 /**
- * @file elementor-dynamic-tags.php
- * @description Elementor 動態標籤類別 - 用於顯示主題設定值
- * @path /inc/elementor-dynamic-tags.php
+ * Elementor 動態標籤擴展
+ * 
+ * 提供主題設定值的 Elementor 動態標籤功能
+ * 包含文字、連結、圖片、服務項目等多種動態標籤類型
+ * 
+ * @package HelloElementorChild
+ * @subpackage Modules/ElementorDynamicTags
+ * @version 1.0.2
+ * @since 2.0.0
+ * @author Your Name
+ * 
+ * === WP-CLI Elementor 動態標籤檢測指令使用指南 ===
+ * 
+ * 本模組為 Elementor 提供 8 種自訂動態標籤，透過以下指令檢測和管理：
+ * 
+ * 🔍 系統檢測指令：
+ * 
+ * 1. 📋 檢查 Elementor 狀態
+ *    wp plugin status elementor --allow-root
+ *    wp plugin status elementor-pro --allow-root
+ *    # 檢查 Elementor 外掛是否安裝並啟用
+ * 
+ * 2. 🔧 檢查 Elementor 版本
+ *    wp eval 'if (defined("ELEMENTOR_VERSION")) echo "Elementor 版本: " . ELEMENTOR_VERSION . "\n"; else echo "Elementor 未啟用\n";' --allow-root
+ *    # 確認 Elementor 版本是否支援動態標籤
+ * 
+ * 3. 🎯 檢查動態標籤類別可用性
+ *    wp eval 'echo class_exists("\Elementor\Core\DynamicTags\Tag") ? "✅ 動態標籤基礎類別可用" : "❌ 動態標籤類別不可用"; echo "\n";' --allow-root
+ *    # 驗證動態標籤核心類別是否存在
+ * 
+ * 4. 📊 檢查主題動態標籤檔案
+ *    wp eval 'echo file_exists(get_stylesheet_directory() . "/inc/elementor-dynamic-tags.php") ? "✅ 動態標籤檔案存在" : "❌ 動態標籤檔案不存在"; echo "\n";' --allow-root
+ *    # 確認主題動態標籤檔案是否正確載入
+ * 
+ * 🛠️ 資料來源檢測指令：
+ * 
+ * 5. 📋 檢查主題設定資料完整性
+ *    wp option list --search="index_*" --format=count --allow-root
+ *    # 統計所有主題設定項目數量
+ * 
+ * 6. 🔍 檢查服務項目列表結構
+ *    wp option get index_service_list --format=json --allow-root
+ *    # 以 JSON 格式查看服務項目的完整結構
+ * 
+ * 7. 🎨 檢查圖片設定項目
+ *    wp eval 'foreach(["index_hero_bg", "index_hero_photo", "index_about_photo", "index_footer_cta_bg"] as $key) { $val = get_option($key); echo "$key: " . ($val ? "有設定" : "未設定") . "\n"; }' --allow-root
+ *    # 檢查所有圖片相關設定是否有值
+ * 
+ * 8. 🔗 檢查連結設定項目  
+ *    wp eval 'foreach(["index_hero_cta_link", "index_about_cta_link", "index_footer_fb", "index_footer_ig"] as $key) { $val = get_option($key); echo "$key: " . ($val ? $val : "未設定") . "\n"; }' --allow-root
+ *    # 檢查所有連結相關設定
+ * 
+ * 📦 Elementor Kit 檢測指令：
+ * 
+ * 9. 🎯 檢查 Elementor Active Kit
+ *    wp option get elementor_active_kit --allow-root
+ *    # 取得目前啟用的 Elementor Kit ID
+ * 
+ * 10. 🔧 檢查 Kit 設定
+ *     wp post meta get $(wp option get elementor_active_kit --allow-root) _elementor_page_settings --format=json --allow-root
+ *     # 查看 Kit 的完整設定（包含 Global Colors 等）
+ * 
+ * 11. 🧹 清除 Elementor 快取
+ *     wp eval 'if (class_exists("\Elementor\Plugin")) { \Elementor\Plugin::$instance->files_manager->clear_cache(); echo "✅ Elementor 快取已清除\n"; } else { echo "❌ Elementor 不可用\n"; }' --allow-root
+ *     # 清除 Elementor 檔案快取，確保動態標籤更新
+ * 
+ * === 可用的動態標籤類型 ===
+ * 
+ * 🏷️ 文字類動態標籤：
+ * • Theme Setting - 主題設定文字值
+ *   支援所有文字設定項目 (index_hero_title, index_about_content 等)
+ *   包含服務項目個別欄位存取
+ * 
+ * 🔗 連結類動態標籤：
+ * • Theme Setting (Link) - 主題設定連結值
+ *   支援 CTA 連結和社群媒體連結
+ *   自動處理 mailto: 前綴
+ * 
+ * 🖼️ 圖片類動態標籤：
+ * • Theme Setting (Image) - 主題設定圖片
+ * • Theme Setting (Image URL) - 圖片 URL 文字版
+ *   支援相對路徑自動轉換為完整 URL
+ *   包含 fallback 機制
+ * 
+ * 🛠️ 服務項目專用標籤：
+ * • Service List - 服務項目列表（JSON/HTML/計數）
+ * • Service Icon - 服務項目圖示（多種格式）
+ * • Service Item HTML - 單一服務項目完整 HTML
+ * • All Services HTML - 所有服務項目完整 HTML
+ * 
+ * === 動態標籤測試指令 ===
+ * 
+ * 12. 🧪 測試特定設定值
+ *     wp eval 'echo "Hero 標題: " . get_option("index_hero_title", "未設定") . "\n";' --allow-root
+ *     wp eval 'echo "Hero 副標題: " . get_option("index_hero_subtitle", "未設定") . "\n";' --allow-root
+ *     # 測試動態標籤的資料來源
+ * 
+ * 13. 🔧 測試服務項目結構
+ *     wp eval '$services = get_option("index_service_list", []); echo "服務項目數量: " . count($services) . "\n"; if(!empty($services)) echo "第一個項目: " . print_r($services[0], true);' --allow-root
+ *     # 測試服務項目動態標籤的資料結構
+ * 
+ * 14. 📊 生成動態標籤測試報告
+ *     wp eval 'echo "=== 動態標籤資料檢測報告 ===\n"; $keys = ["index_hero_title", "index_hero_subtitle", "index_about_title", "index_service_title"]; foreach($keys as $key) { $val = get_option($key); echo "$key: " . (empty($val) ? "❌ 空值" : "✅ 有資料") . "\n"; }' --allow-root
+ *     # 產生完整的動態標籤可用性報告
+ * 
+ * === 故障排除指令 ===
+ * 
+ * 如果動態標籤無法正常顯示：
+ * 
+ * 1. 檢查 Elementor 狀態：
+ *    wp plugin status elementor --allow-root
+ * 
+ * 2. 檢查主題檔案：
+ *    wp eval 'echo file_exists(get_stylesheet_directory() . "/inc/elementor-dynamic-tags.php") ? "檔案存在" : "檔案不存在"; echo "\n";' --allow-root
+ * 
+ * 3. 檢查 PHP 錯誤：
+ *    wp eval 'error_reporting(E_ALL); ini_set("display_errors", 1); require_once get_stylesheet_directory() . "/inc/elementor-dynamic-tags.php"; echo "檔案載入成功\n";' --allow-root
+ * 
+ * 4. 重新啟用主題：
+ *    wp theme activate hello-elementor-child --allow-root
+ * 
+ * 5. 清除所有快取：
+ *    wp cache flush --allow-root
+ *    wp eval 'if (class_exists("\Elementor\Plugin")) \Elementor\Plugin::$instance->files_manager->clear_cache();' --allow-root
+ * 
+ * === 開發者除錯指令 ===
+ * 
+ * 15. 🔍 檢查動態標籤註冊狀態
+ *     wp eval 'add_action("elementor/dynamic_tags/register_tags", function($tags) { echo "動態標籤管理器已載入\n"; $registered = $tags->get_tags(); echo "已註冊標籤數量: " . count($registered) . "\n"; });' --allow-root
+ *     # 檢查動態標籤是否正確註冊到 Elementor
+ * 
+ * 16. 🧪 測試動態標籤類別實例化
+ *     wp eval 'if (class_exists("Theme_Setting_Dynamic_Tag")) { echo "✅ Theme_Setting_Dynamic_Tag 類別可用\n"; } else { echo "❌ 類別不存在\n"; }' --allow-root
+ *     # 測試自訂動態標籤類別是否正確載入
+ * 
+ * === 實際使用範例 ===
+ * 
+ * 在 Elementor 編輯器中使用：
+ * 1. 編輯任何元素的文字屬性
+ * 2. 點擊動態內容圖示（魔術棒）
+ * 3. 選擇 "Theme Settings" 群組
+ * 4. 選擇適合的動態標籤類型
+ * 5. 配置相關設定（如服務項目索引）
+ * 
+ * 支援的元素類型：
+ * • 標題元素 → Theme Setting (文字)
+ * • 按鈕元素 → Theme Setting (Link)  
+ * • 圖片元素 → Theme Setting (Image)
+ * • 圖示元素 → Service Icon
+ * • HTML 元素 → Service Item HTML / All Services HTML
+ * 
+ * Features:
+ * - 主題設定文字動態標籤
+ * - 連結專用動態標籤
+ * - 圖片專用動態標籤
+ * - 服務項目動態標籤
+ * - 完整 HTML 服務列表
+ * - 響應式 CSS 支援
+ * - 自訂模板功能
+ * - WP-CLI 檢測支援
+ * 
+ * Changelog:
+ * 1.0.2 - 2025-07-07
+ * - 新增完整的 WP-CLI 檢測指令使用指南
+ * - 詳細的動態標籤類型和功能說明
+ * - 故障排除和開發者除錯指令
+ * - 實際使用範例和最佳實踐
+ * - 系統相容性檢測機制
+ * 
+ * 1.0.1 - 2025-07-07
+ * - 新增 Elementor 可用性檢查
+ * - 修復 Elementor 停用時的致命錯誤
+ * - 改善錯誤提示和用戶體驗
+ * - 確保在外掛停用時安全降級
+ * 
+ * 1.0.0 - 2025-01-06
+ * - 初始版本
+ * - 基本動態標籤功能
+ * - 8 種不同類型標籤
+ * - 服務項目完整支援
+ * - HTML 模板系統
+ * - 響應式樣式整合
+ * - 圖示格式轉換
+ * - URL 自動處理
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * 檢查 Elementor 是否啟用且相關類別可用
+ * 
+ * @since 1.0.1
+ */
+if (!function_exists('is_elementor_available')) {
+    function is_elementor_available() {
+        return class_exists('\Elementor\Plugin') && 
+               class_exists('\Elementor\Core\DynamicTags\Tag') && 
+               class_exists('\Elementor\Core\DynamicTags\Data_Tag') && 
+               class_exists('\Elementor\Controls_Manager');
+    }
+}
+
+// 如果 Elementor 不可用，提前返回避免錯誤
+if (!is_elementor_available()) {
+    // 在管理後台顯示通知
+    if (is_admin()) {
+        add_action('admin_notices', function() {
+            echo '<div class="notice notice-warning is-dismissible">';
+            echo '<p><strong>主題動態標籤模組：</strong>需要 Elementor 外掛才能正常運作。</p>';
+            echo '</div>';
+        });
+    }
+    return; // 停止載入此檔案的剩餘內容
+}
+
+// 只有在 Elementor 可用時才引入這些類別
 use Elementor\Core\DynamicTags\Tag;
 use Elementor\Core\DynamicTags\Data_Tag;
 use Elementor\Controls_Manager;
 
 /**
  * 註冊自訂動態標籤群組
+ * 
+ * @since 1.0.0
  */
 add_action('elementor/dynamic_tags/register_tags', function($dynamic_tags) {
     // 註冊自訂群組
@@ -27,12 +238,20 @@ add_action('elementor/dynamic_tags/register_tags', function($dynamic_tags) {
 });
 
 /**
- * 主要文字動態標籤 - 用於文字欄位
+ * 主要文字動態標籤類別
+ * 
+ * 用於顯示主題設定中的文字內容
+ * 
+ * @since 1.0.0
+ * @version 1.0.0
  */
 class Theme_Setting_Dynamic_Tag extends Tag {
 
     /**
      * 取得動態標籤名稱
+     * 
+     * @return string
+     * @since 1.0.0
      */
     public function get_name() {
         return 'theme-setting';
@@ -40,6 +259,9 @@ class Theme_Setting_Dynamic_Tag extends Tag {
 
     /**
      * 取得動態標籤標題
+     * 
+     * @return string
+     * @since 1.0.0
      */
     public function get_title() {
         return __('Theme Setting', 'textdomain');
@@ -47,6 +269,9 @@ class Theme_Setting_Dynamic_Tag extends Tag {
 
     /**
      * 取得動態標籤群組
+     * 
+     * @return string
+     * @since 1.0.0
      */
     public function get_group() {
         return 'theme';
@@ -54,6 +279,9 @@ class Theme_Setting_Dynamic_Tag extends Tag {
 
     /**
      * 取得動態標籤類別
+     * 
+     * @return array
+     * @since 1.0.0
      */
     public function get_categories() {
         return ['text'];

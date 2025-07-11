@@ -9,6 +9,14 @@
 
 // 載入 BT Panel API 類別
 require_once DEPLOY_BASE_PATH . '/includes/class-bt-panel-api.php';
+require_once DEPLOY_BASE_PATH . '/includes/class-auth-manager.php';
+
+// 確保認證可用
+$authManager = new AuthManager();
+if (!$authManager->ensureValidCredentials()) {
+    $deployer->log("認證失敗，無法執行 BT Panel 操作");
+    return ['status' => 'error', 'message' => '認證失敗'];
+}
 
 // 載入處理後的資料
 $work_dir = DEPLOY_BASE_PATH . '/temp/' . $job_id;

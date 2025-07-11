@@ -307,6 +307,18 @@ function callOpenAI($prompt, $openai_config, $deployer) {
     ]);
     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
     
+    // 載入部署配置以檢查代理設定
+    $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+    if (file_exists($deploy_config_file)) {
+        $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+        // 檢查是否需要使用代理
+        if (isset($deploy_config['network']['use_proxy']) && 
+            $deploy_config['network']['use_proxy'] === true && 
+            !empty($deploy_config['network']['proxy'])) {
+            curl_setopt($ch, CURLOPT_PROXY, $deploy_config['network']['proxy']);
+        }
+    }
+    
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
@@ -329,8 +341,8 @@ function callOpenAI($prompt, $openai_config, $deployer) {
  */
 function callGemini($prompt, $gemini_config, $all_api_credentials, $deployer) {
     $api_key = $gemini_config['api_key'] ?? '';
-    $model = $gemini_config['model'] ?? 'gemini-2.5-flash';
-    $base_url = $gemini_config['base_url'] ?? 'https://generativelanguage.googleapis.com/v1beta';
+    $model = $gemini_config['model'] ?? 'gemini-2.0-flash-exp';
+    $base_url = $gemini_config['base_url'] ?? 'https://generativelanguage.googleapis.com/v1beta/models/';
     
     if (empty($api_key)) {
         throw new Exception("Gemini API 金鑰未設定");
@@ -355,7 +367,8 @@ function callGemini($prompt, $gemini_config, $all_api_credentials, $deployer) {
     ];
     
     $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $base_url . "/models/{$model}:generateContent?key={$api_key}");
+    // 使用與 step-08 相同的 URL 構建方式
+    curl_setopt($ch, CURLOPT_URL, rtrim($base_url, '/') . '/' . $model . ':generateContent?key=' . $api_key);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
     curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
@@ -363,6 +376,18 @@ function callGemini($prompt, $gemini_config, $all_api_credentials, $deployer) {
         'Content-Type: application/json',
     ]);
     curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+    
+    // 載入部署配置以檢查代理設定
+    $deploy_config_file = DEPLOY_BASE_PATH . '/config/deploy-config.json';
+    if (file_exists($deploy_config_file)) {
+        $deploy_config = json_decode(file_get_contents($deploy_config_file), true);
+        // 檢查是否需要使用代理
+        if (isset($deploy_config['network']['use_proxy']) && 
+            $deploy_config['network']['use_proxy'] === true && 
+            !empty($deploy_config['network']['proxy'])) {
+            curl_setopt($ch, CURLOPT_PROXY, $deploy_config['network']['proxy']);
+        }
+    }
     
     $response = curl_exec($ch);
     $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);

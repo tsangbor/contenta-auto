@@ -47,6 +47,8 @@ class BTPanelAPI
         
         $this->log("API 請求 URL: {$url}");
         $this->log("使用瀏覽器 Cookie 認證");
+        $this->log("實際使用的 Cookie: " . substr($sessionCookie, 0, 80) . "...");
+        $this->log("實際使用的 Token: " . $httpToken);
 
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);

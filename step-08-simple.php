@@ -17,7 +17,7 @@ if (!is_dir($work_dir)) {
     $deployer->log("工作目錄不存在，正在建立: {$work_dir}");
     
     // 使用現有資料或建立預設資料
-    $data_dir = DEPLOY_BASE_PATH . '/data';
+    $data_dir = DEPLOY_BASE_PATH . '/data/' . $job_id;
     $json_file = null;
     if (is_dir($data_dir)) {
         $data_files = scandir($data_dir);

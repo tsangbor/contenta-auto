@@ -1,0 +1,73 @@
+{
+  "homehero001": {
+    "description": "經典的左右兩欄式佈局。左側為大型標題、副標題和CTA按鈕的文字區；右側為獨立的個人形象或情境圖片區。",
+    "style_tags": ["classic", "professional", "image-and-text", "asymmetrical", "storytelling"],
+    "use_case": "適用於絕大多數需要建立信任感和專業形象的品牌首頁，特別是個人品牌、顧問、教練和 B2B 服務。"
+  },
+  "homehero002": {
+    "description": "沉浸式的全螢幕背景圖佈局，所有文字元素（主副標題、描述、按鈕）在畫面上垂直居中排列，帶有深色遮罩以突顯文字。",
+    "style_tags": ["cinematic", "immersive", "bold", "image-focused", "minimalist-text"],
+    "use_case": "最適合希望透過一張高品質情境圖來快速建立品牌氛圍的網站，例如旅遊、攝影、高端產品或任何注重美學的品牌。"
+  },
+  "hero001": {
+    "description": "一個簡潔、限制寬度的內頁標題橫幅 (Page Banner)，內容為置中的主標題和副標題，通常用於非首頁的頁面頂部。",
+    "style_tags": ["minimalist", "clean", "functional", "universal", "header-banner"],
+    "use_case": "作為網站內頁（如關於我、服務、聯絡我們、部落格）的標準頁首，用來標示當前頁面主題，建立網站導覽的一致性。"
+  },
+  "hero002": {
+    "description": "一個以行動呼籲為導向的置中內容英雄區塊，特點是在主副標題下方，提供一實一虛的兩個並排按鈕，引導用戶做出選擇。",
+    "style_tags": ["cta-focused", "conversion-driven", "interactive", "dual-button"],
+    "use_case": "適用於需要引導訪客採取兩種不同行動的頁面。例如，軟體服務頁的『觀看演示』與『免費試用』，或顧問服務的『了解方案』與『預約諮詢』。"
+  },
+  "hero003": {
+    "description": "一個簡潔、限制寬度的內頁標題橫幅 (Page Banner)，內容為置中的主標題和副標題。與 hero001 功能和結構基本相同，可作為備用選項。",
+    "style_tags": ["minimalist", "clean", "functional", "universal", "header-banner"],
+    "use_case": "作為網站內頁（如關於我、服務、聯絡我們、部落格）的標準頁首，用來標示當前頁面主題，建立網站導覽的一致性。"
+  },
+  "about001": {
+    "description": "經典的左右兩欄式佈局。一側為品牌或個人形象圖，另一側為標題、詳細介紹內文及一個行動呼籲按鈕。",
+    "style_tags": ["classic", "storytelling", "balanced", "image-and-text", "professional"],
+    "use_case": "適用於大多數網站的『關於我們』頁面，能完整地介紹品牌或個人故事，建立訪客的信任感。"
+  },
+  "about002": {
+    "description": "以文字為核心的兩欄式佈局。左側為大篇幅的標題與故事內文，右側以一張較小的圖片作為視覺點綴。",
+    "style_tags": ["text-focused", "minimalist", "intellectual", "storytelling", "clean"],
+    "use_case": "最適合需要深度闡述品牌理念、創辦人背景或專業資歷的場景，例如作家、學者、顧問或任何以內容為核心的品牌。"
+  }, 
+  "archive001": {
+    "description": "一個標準的部落格文章列表區塊，以網格卡片（Cards）的形式展示多篇文章，每張卡片包含圖片、標題和摘要。底部帶有分頁或加載更多功能。",
+    "style_tags": ["grid", "card-ui", "blog-listing", "organized", "content-focused"],
+    "use_case": "適用於所有網站的『部落格』或『最新消息』頁面，也可用於首頁，展示最新的幾篇文章。"
+  },
+  "contact001": {
+    "description": "一個功能完整的兩欄式聯絡區塊。左側為嵌入式 Google 地圖，右側為網格佈局，清晰地列出電子郵件、電話、地址和社群等多種聯絡方式。",
+    "style_tags": ["functional", "informative", "map-integrated", "professional", "all-in-one"],
+    "use_case": "最適合有實體辦公室、工作室或店面的品牌，提供訪客最完整的聯絡與地理資訊。對於純線上品牌，需要考慮是否隱藏地圖。"
+  }, 
+  "cta001": {
+    "description": "一個左右兩欄式的行動呼籲(CTA)區塊。左側為大型情境圖片，右側為置中的標題和行動呼籲按鈕。",
+    "style_tags": ["visual", "high-impact", "conversion-focused", "image-and-text"],
+    "use_case": "適用於頁面中段或頁尾，用來引導使用者前往特定頁面（如服務頁、聯絡頁）或完成特定目標（如下載、註冊）。"
+  },
+  "cta002": {
+    "description": "一個具現代感的行動呼籲(CTA)區塊，將標題、副標題和按鈕等文字內容，直接疊加在整張背景圖片之上。",
+    "style_tags": ["modern", "text-overlay", "magazine-style", "visual", "conversion-focused"],
+    "use_case": "適用於注重視覺美學和品牌形象的網站，能創造出強烈的風格感。常用於引導訂閱電子報或參加活動。"
+  }, 
+    
+  "service001": {
+    "description": "置頂標題區塊，下方是由多個（預設四個）橫向並排的『圖標盒子』(Icon Box) 組成的服務列表，結尾有一個行動呼籲(CTA)按鈕。",
+    "style_tags": ["minimalist", "clean", "icon-based", "functional", "text-heavy"],
+    "use_case": "最適用於需要清晰、快速條列多項核心服務的場景，例如顧問、軟體功能列表。不適合需要大量圖片展示的行業。"
+  },
+  "service002": {
+    "description": "經典的左右兩欄式佈局。一側為大幅的代表性圖片，另一側包含主副標題，以及一個由多個『圖標盒子』組成的詳細功能點網格。",
+    "style_tags": ["detailed", "professional", "informative", "image-and-text", "asymmetrical"],
+    "use_case": "非常適合用來深入介紹單一核心服務或一個產品。左側大圖建立情境，右側文字詳細闡述價值，適合 B2B、高單價服務或 SaaS 產品介紹頁。"
+  },
+  "service003": {
+    "description": "以視覺為導向的網格佈局，頂部為標題區，下方由多個『圖片盒子』(Image Box) 組成，每個項目都以圖片為主角，並帶有滑鼠懸停互動效果。",
+    "style_tags": ["visual", "portfolio-style", "grid", "image-focused", "interactive"],
+    "use_case": "最適合展示具有強烈視覺吸引力的服務或作品，例如攝影作品、室內設計案例、旅遊行程、餐飲菜單或任何電商產品列表。"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "contenta-auto",
+  "version": "1.0.0",
+  "description": "Contenta Auto Deployment Tools",
+  "scripts": {
+    "get-token": "node get-btpanel-token.js"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0"
+  }
+}

@@ -112,7 +112,13 @@ class WP_CLI_Executor
             $import_command .= " --alt=" . escapeshellarg($alt_text);
         }
         
-        $result = $this->execute($import_command);
+        // 加上 --skip-themes 和 --skip-plugins 避免衝突
+        $options = [
+            'skip-themes' => true,
+            'skip-plugins' => true
+        ];
+        
+        $result = $this->execute($import_command, $options);
         
         // 清理遠端臨時檔案
         $this->execute_ssh("rm -f {$remote_temp_path}");

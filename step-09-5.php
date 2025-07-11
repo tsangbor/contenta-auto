@@ -88,9 +88,19 @@ function loadOriginalUserData($work_dir)
     
     // 方法2: 從 job_id 對應的原始檔案載入
     $job_id = basename($work_dir);
-    $original_data_path = DEPLOY_BASE_PATH . '/data/' . $job_id . '.json';
+    
+    // 支援新的目錄結構：data/{job_id}/{job_id}.json
+    $job_dir = DEPLOY_BASE_PATH . '/data/' . $job_id;
+    $original_data_path = $job_dir . '/' . $job_id . '.json';
+    
     if (file_exists($original_data_path)) {
         return json_decode(file_get_contents($original_data_path), true);
+    } else {
+        // 向後相容：檢查舊的檔案位置
+        $old_original_data_path = DEPLOY_BASE_PATH . '/data/' . $job_id . '.json';
+        if (file_exists($old_original_data_path)) {
+            return json_decode(file_get_contents($old_original_data_path), true);
+        }
     }
     
     // 方法3: 從配置檔案載入（簡化模式）
