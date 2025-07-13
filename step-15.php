@@ -346,6 +346,7 @@ function generate_ideogram_image($prompt, $size, $quality, $ideogram_config) {
     }
     
     $url = 'https://api.ideogram.ai/v1/ideogram-v3/generate';
+    // 優化成本：預設使用 TURBO 模式（$0.025-0.04/圖），只有明確要求 high 才使用 DEFAULT（$0.08/圖）
     $rendering_speed = $quality === 'high' ? 'DEFAULT' : 'TURBO';
     
     // 準備 multipart form data
@@ -607,28 +608,85 @@ foreach ($prompts as $index => $article_prompt) {
             'tags' => implode(',', $article_prompt['tags'] ?? [])
         ];
         
-        // 分類對應關係（從 article-prompts.json 到 site-config.json 的分類）
-        $category_mapping = [
-            '人類圖諮詢' => 'human-design-knowledge',
-            '能量調頻' => 'self-awareness',  // 能量調頻相關文章歸類到自我覺察
-            '線上課程' => 'growth-resources', // 線上課程歸類到自我成長資源推薦
-            '自我成長' => 'self-awareness', 
-            '個人品牌' => 'growth-resources'
-        ];
-        
-        // 設定分類（使用分類 ID）
-        $article_category = $article_prompt['category'] ?? '';
-        if (!empty($article_category) && isset($category_mapping[$article_category])) {
-            $category_slug = $category_mapping[$article_category];
-            
-            // 取得分類 ID
-            $category_id = $wp_cli->get_category_id($category_slug);
-            if ($category_id) {
-                $post_data['category'] = $category_id;
-                $deployer->log("  文章將分類至: {$article_category} (slug: {$category_slug}, ID: {$category_id})");
-            } else {
-                $deployer->log("  警告: 找不到分類 ID for slug: {$category_slug}");
+        // 動態取得可用的分類
+        $available_categories = [];
+        if (isset($site_config['categories']) && is_array($site_config['categories'])) {
+            foreach ($site_config['categories'] as $cat) {
+                if (!empty($cat['slug'])) {
+                    $available_categories[$cat['slug']] = [
+                        'name' => $cat['name'] ?? '',
+                        'id' => $wp_cli->get_category_id($cat['slug'])
+                    ];
+                }
             }
+        }
+        
+        // 智能分類匹配
+        $article_category = $article_prompt['category'] ?? '';
+        $matched_category_id = null;
+        
+        if (!empty($article_category) && !empty($available_categories)) {
+            // 方法1: 完全匹配分類名稱
+            foreach ($available_categories as $slug => $cat_info) {
+                if (strcasecmp($cat_info['name'], $article_category) === 0) {
+                    $matched_category_id = $cat_info['id'];
+                    $deployer->log("  文章分類匹配成功（完全匹配）: {$article_category} → {$cat_info['name']} (ID: {$matched_category_id})");
+                    break;
+                }
+            }
+            
+            // 方法2: 如果沒有完全匹配，嘗試部分匹配
+            if (!$matched_category_id) {
+                foreach ($available_categories as $slug => $cat_info) {
+                    // 檢查是否包含關鍵字
+                    if (mb_strpos($article_category, $cat_info['name']) !== false || 
+                        mb_strpos($cat_info['name'], $article_category) !== false) {
+                        $matched_category_id = $cat_info['id'];
+                        $deployer->log("  文章分類匹配成功（部分匹配）: {$article_category} → {$cat_info['name']} (ID: {$matched_category_id})");
+                        break;
+                    }
+                }
+            }
+            
+            // 方法3: 基於關鍵字匹配
+            if (!$matched_category_id) {
+                // 定義關鍵字映射規則
+                $keyword_rules = [
+                    '文化' => ['文化', '歷史', '藝術', '人文'],
+                    '味覺' => ['味覺', '美食', '料理', '飲食'],
+                    '成長' => ['成長', '學習', '提升', '進步'],
+                    '旅遊' => ['旅遊', '旅行', '遊記', '探索']
+                ];
+                
+                foreach ($available_categories as $slug => $cat_info) {
+                    foreach ($keyword_rules as $key => $keywords) {
+                        if (mb_strpos($cat_info['name'], $key) !== false) {
+                            // 檢查文章分類是否包含相關關鍵字
+                            foreach ($keywords as $keyword) {
+                                if (mb_strpos($article_category, $keyword) !== false) {
+                                    $matched_category_id = $cat_info['id'];
+                                    $deployer->log("  文章分類匹配成功（關鍵字匹配）: {$article_category} → {$cat_info['name']} (ID: {$matched_category_id})");
+                                    break 3;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 如果還是沒有匹配，使用第一個可用分類作為預設
+            if (!$matched_category_id && !empty($available_categories)) {
+                $first_cat = reset($available_categories);
+                $matched_category_id = $first_cat['id'];
+                $deployer->log("  警告: 無法匹配分類 '{$article_category}'，使用預設分類: {$first_cat['name']} (ID: {$matched_category_id})");
+            }
+        }
+        
+        // 設定分類
+        if ($matched_category_id) {
+            $post_data['category'] = $matched_category_id;
+        } else {
+            $deployer->log("  警告: 未設定文章分類（沒有可用的分類或無法匹配）");
         }
         
         $post_result = $wp_cli->create_post($post_data);

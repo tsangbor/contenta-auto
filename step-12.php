@@ -240,9 +240,14 @@ function updateJsonTemplateImagePaths($json_file, $image_mapping, $template_name
                         }
                         
                         if ($found_match) {
-                            $json_content = str_replace($found_filename, $wp_url, $json_content);
-                            $replacement_count++;
-                            $deployer->log("    全域模板替換: $found_filename -> $wp_url (來源: $page_name.$image_key)");
+                            // 只有當檔案名稱不同時才進行替換
+                            if ($found_filename !== $wp_url) {
+                                $json_content = str_replace($found_filename, $wp_url, $json_content);
+                                $replacement_count++;
+                                $deployer->log("    全域模板替換: $found_filename -> $wp_url (來源: $page_name.$image_key)");
+                            } else {
+                                $deployer->log("    ✓ 圖片路徑已正確，無需替換: $found_filename");
+                            }
                             break 2; // 跳出兩層迴圈
                         }
                     }
@@ -432,9 +437,14 @@ function replaceImagePathsInArray($data, $image_mapping, &$replacement_count, $d
                             if (strpos($value, $image_key) !== false || 
                                 strpos($path_filename, $image_key) !== false ||
                                 strpos($path_filename, strtolower(str_replace('_', '-', $image_key))) !== false) {
-                                $data[$key] = $wp_url;
-                                $replacement_count++;
-                                $deployer->log("    配置替換: $value -> $wp_url (來源: $page_name.$image_key)");
+                                // 只有當路徑不同時才替換
+                                if ($value !== $wp_url) {
+                                    $data[$key] = $wp_url;
+                                    $replacement_count++;
+                                    $deployer->log("    配置替換: $value -> $wp_url (來源: $page_name.$image_key)");
+                                } else {
+                                    $deployer->log("    ✓ 配置圖片路徑已正確，無需替換: $value");
+                                }
                                 break 2; // 跳出兩層迴圈
                             }
                         }
@@ -500,21 +510,27 @@ function replaceElementorImageObject($image_object, $image_mapping, &$replacemen
                 preg_replace('/[^a-zA-Z0-9]/', '', strtolower($original_filename)) === 
                 preg_replace('/[^a-zA-Z0-9]/', '', strtolower($wp_filename))
             ) {
-                // 找到匹配，更新圖片對象
-                $updated_object = $image_object;
-                $updated_object['url'] = $wp_url;
-                
-                if ($attachment_id !== null) {
-                    $updated_object['id'] = intval($attachment_id);
+                // 只有當 URL 或 ID 不同時才更新
+                if ($original_url !== $wp_url || ($attachment_id !== null && $original_id != $attachment_id)) {
+                    // 找到匹配，更新圖片對象
+                    $updated_object = $image_object;
+                    $updated_object['url'] = $wp_url;
+                    
+                    if ($attachment_id !== null) {
+                        $updated_object['id'] = intval($attachment_id);
+                    }
+                    
+                    $replacement_count++;
+                    $deployer->log("    🖼️ Elementor 圖片對象替換: ");
+                    $deployer->log("      URL: $original_url -> $wp_url");
+                    $deployer->log("      ID:  $original_id -> " . ($attachment_id ?? '保持原有'));
+                    $deployer->log("      匹配來源: $page_name.$image_key");
+                    
+                    return $updated_object;
+                } else {
+                    // 路徑和ID都相同，不需要替換
+                    $deployer->log("    ✓ Elementor 圖片對象已正確，無需替換: $original_url");
                 }
-                
-                $replacement_count++;
-                $deployer->log("    🖼️ Elementor 圖片對象替換: ");
-                $deployer->log("      URL: $original_url -> $wp_url");
-                $deployer->log("      ID:  $original_id -> " . ($attachment_id ?? '保持原有'));
-                $deployer->log("      匹配來源: $page_name.$image_key");
-                
-                return $updated_object;
             }
         }
     }

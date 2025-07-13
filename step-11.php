@@ -169,27 +169,29 @@ try {
 
 /**
  * 從圖片檔案名稱提取頁面名稱
- * 例如: home_hero-bg.png -> home
- * 例如: about_about-photo.png -> about
+ * 例如: 2507131138-3190_home_hero-bg.png -> home
+ * 例如: 2507131138-3190_about_about-photo.png -> about
  */
 function extractPageNameFromImageFile($image_file) {
     $basename = pathinfo($image_file, PATHINFO_FILENAME);
     $parts = explode('_', $basename);
-    return $parts[0] ?? 'unknown';
+    // 新格式：job_id_template_placeholder，所以頁面名稱在索引 1
+    return $parts[1] ?? 'unknown';
 }
 
 /**
  * 從圖片檔案名稱提取圖片鍵值
- * 例如: home_hero-bg.png -> HERO_BG
- * 例如: about_about-photo.png -> ABOUT_PHOTO
- * 例如: home_hero-bg-6.png -> HERO_BG
+ * 例如: 2507131138-3190_home_hero-bg.png -> HERO_BG
+ * 例如: 2507131138-3190_about_about-photo.png -> ABOUT_PHOTO
+ * 例如: 2507131138-3190_home_hero-bg-6.png -> HERO_BG
  */
 function extractImageKeyFromImageFile($image_file) {
     $basename = pathinfo($image_file, PATHINFO_FILENAME);
-    $parts = explode('_', $basename, 2);
-    if (count($parts) > 1) {
+    $parts = explode('_', $basename, 3);
+    // 新格式：job_id_template_placeholder，所以佔位符在索引 2
+    if (count($parts) > 2) {
         // 移除數字後綴 (如 -6, -3 等)
-        $key_part = preg_replace('/-\d+$/', '', $parts[1]);
+        $key_part = preg_replace('/-\d+$/', '', $parts[2]);
         // 轉換為大寫並替換破折號為下劃線
         return strtoupper(str_replace('-', '_', $key_part));
     }

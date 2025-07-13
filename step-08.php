@@ -278,23 +278,35 @@ D. **受眾核心痛點 (Audience Core Pain Points)**:
 ' . $container_options . '
 
 #### 2.2 頁面組裝邏輯與規則 (Page Assembly Logic and Rules)
-你必須嚴格遵守以下規則來為每個頁面進行佈局：
+你必須嚴格遵守以下規則來為每個頁面進行佈局。我們為首頁 (home) 和其他內頁設定不同的組裝策略。
 
-**Hero 區塊規則**： 每個頁面的第一個區塊都必須是一個 Hero 容器。
-- home 頁面：必須且只能使用 homehero 開頭的容器（如 homehero001, homehero002）。
-- 其他所有頁面 (如 about, service 等)：必須從 hero 開頭的容器中，根據該頁面的目標和品牌調性，選擇一個最合適的。
+**A. 首頁 (Home Page) 組裝藍圖**
+對於 home 頁面，你不能只選擇一個 Hero 區塊就結束。你必須扮演首席設計師，為訪客打造一趟完整的品牌初體驗旅程。請至少遵循以下結構，依序組合 3-4 個區塊來構成首頁：
 
-**核心內容區塊規則**： 每個頁面都應包含一個與其功能相符的核心區塊。
-- about 頁面：必須從 about 類型容器中選擇一個。
-- service 頁面：必須從 service 類型容器中選擇一個或多個。
-- blog 頁面：必須包含 archive 類型容器。
-- contact 頁面：必須包含 contact 類型容器。
+**第一部分：建立第一印象 (Hero Section)**
+- **必須 (Must-have)**: 頁面的第一個區塊，必須從 homehero... 容器中選擇一個。你的選擇 (homehero001 vs homehero002) 必須基於品牌調性。
+- **決策指引**: 對於溫暖、療癒、親和的品牌，homehero002 的沉浸式風格可能比 homehero001 的商業感風格更貼切。
 
-**選擇標準**： 當有多個選項時（例如 about001 vs about002），你必須基於品牌調性和目標受眾，做出能打動目標受眾的最佳選擇。不要總是選擇編號 001。
+**第二部分：建立信任與連結 (About Section)**  
+- **強烈建議 (Strongly Recommended)**: 在 Hero 之後，緊接著加入一個 about... 容器。這能幫助訪客在第一時間快速了解「你是誰」，建立信任感。請根據品牌是強調「個人故事」還是「團隊實力」，從 about001 和 about002 中做出最佳選擇。
 
-**彈性輔助區塊規則**： 在滿足核心需求後，你可以像一位真正的設計師一樣，有策略地加入輔助區塊，以提升頁面的完整性和使用者體驗。
-- 可選用的輔助區塊： cta, faq, contact, archive 等類型
-- 應用範例： 在 service 頁面的服務介紹之後，加入 faq 容器來解答訪客疑慮，並在頁尾前用 cta 容器來引導訪客預約諮詢，都是非常合理的佈局。
+**第三部分：展示核心價值 (Value Proposition Section)**
+- **擇一或全選 (Choose One or Both)**: 接著，你必須向訪客展示品牌的核心價值。你有以下選擇：
+  * **選項 A (服務導向)**: 如果品牌的核心目標是推廣服務 (例如 service_categories 很明確)，請加入一個 service... 區塊，用來摘要介紹核心服務。你應根據服務的複雜度，從 service001, service002, service003 中選擇最合適的一款。
+  * **選項 B (內容導向)**: 如果品牌以內容創作為主（例如部落客、作家），請加入 archive001 區塊，展示最新的文章，體現其專業思想與持續產出的價值。
+- **決策指引**: 你可以同時選擇兩者（例如先 service 後 archive），但需考慮頁面不宜過長。請根據你對用戶資料的分析，判斷「服務」和「內容」哪個對於吸引新訪客更具優先級。
+
+**第四部分：引導下一步行動 (Call to Action)**
+- **建議加入 (Recommended)**: 在頁面中後段，強烈建議加入一個 cta... 或 faq... 區塊，來引導訪客深入探索、解答疑慮或直接預約諮詢。
+
+**B. 其他內頁 (Inner Pages) 組裝規則**
+以下規則適用於除了 home 以外的所有頁面（如 about, service, contact 等）：
+
+**Hero 區塊規則**: 每個內頁的第一個區塊都必須是一個 Hero 容器。你必須從 hero001, hero002, hero003 中，根據該頁面的目標選擇最合適的一款。
+
+**核心內容區塊規則**: 每個頁面都應包含一個與其功能相符的核心區塊（例如 about 頁面必須有 about... 容器）。
+
+**彈性輔助區塊規則**: 在滿足核心需求後，你可以自由判斷是否需要加入 cta..., faq..., contact... 等輔助區塊。
 
 #### 2.3 輸出格式與要求 (Output Format and Requirements)
 最終的 layout_selection 必須是一個 JSON 陣列。每個物件代表一個頁面，container 欄位使用 key-value 格式，key 是區塊類型，value 是選擇的容器編號。
@@ -305,10 +317,11 @@ D. **受眾核心痛點 (Audience Core Pain Points)**:
     {
         "page": "home",
         "container": {
-            "hero": "homehero001",
-            "about": "about002",
-            "service": "service003",
-            "archive": "archive001"
+            "hero": "homehero002",
+            "about": "about001",
+            "service": "service002",
+            "archive": "archive001",
+            "cta": "cta001"
         }
     },
     {

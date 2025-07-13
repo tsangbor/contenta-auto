@@ -37,7 +37,11 @@ class Contenta_Cost_Optimizer
             '1792x1024' => ['standard' => 0.080, 'hd' => 0.120],
             '1024x1792' => ['standard' => 0.080, 'hd' => 0.120]
         ],
-        'imagen-3' => ['per_image' => 0.030] // 🏆 比 DALL-E 3 便宜 25%
+        'ideogram' => [
+            'turbo' => 0.025,     // 🏆 最具成本效益
+            'standard' => 0.080   // 高品質但較貴
+        ],
+        'imagen-3' => ['per_image' => 0.030] // 比 DALL-E 3 便宜 25%
     ];
     
     /**
@@ -66,8 +70,8 @@ class Contenta_Cost_Optimizer
                 'premium' => 'gpt-4o'                   // 最高品質
             ],
             'image_generation' => [
-                'basic' => 'imagen-3',                  // 🏆 $0.03/圖
-                'standard' => 'imagen-3',               // 優質便宜
+                'basic' => 'ideogram-turbo',            // 🏆 $0.025/圖 最便宜
+                'standard' => 'ideogram-turbo',         // 平衡品質與成本
                 'premium' => 'dall-e-3'                 // 最高品質
             ],
             'image_analysis' => [

@@ -16,7 +16,7 @@ try {
     // 1. 掃描所有 *-ai.json 檔案提取圖片佔位符
     $deployer->log("開始掃描圖片佔位符");
     
-    $image_placeholders = extractImagePlaceholders($work_dir, $deployer);
+    $image_placeholders = extractImagePlaceholders($work_dir, $job_id, $deployer);
     $deployer->log("發現 " . count($image_placeholders) . " 個圖片佔位符");
     
     if (empty($image_placeholders)) {
@@ -28,7 +28,7 @@ try {
     $deployer->log("開始生成圖片提示詞");
     
     $ai_service = $config->get('ai_service', 'gemini');
-    $image_prompts = generateImagePrompts($image_placeholders, $site_config, $ai_service, $config, $deployer);
+    $image_prompts = generateImagePrompts($image_placeholders, $work_dir, $ai_service, $config, $deployer);
     
     if (empty($image_prompts)) {
         throw new Exception("圖片提示詞生成失敗");
@@ -85,9 +85,24 @@ try {
 /**
  * 掃描所有 *-ai.json 檔案提取圖片佔位符
  */
-function extractImagePlaceholders($work_dir, $deployer)
+function extractImagePlaceholders($work_dir, $job_id, $deployer)
 {
     $placeholders = [];
+    
+    // 載入 layout_selection 以獲取容器映射資訊
+    $site_config_file = $work_dir . '/json/site-config.json';
+    $layout_selection = [];
+    if (file_exists($site_config_file)) {
+        $site_config = json_decode(file_get_contents($site_config_file), true);
+        $layout_selection = $site_config['layout_selection'] ?? [];
+    }
+    
+    // 建立頁面到容器的映射
+    $page_container_map = [];
+    foreach ($layout_selection as $page_config) {
+        $page_name = $page_config['page'];
+        $page_container_map[$page_name] = $page_config['container'] ?? [];
+    }
     
     // 掃描頁面模板
     $layout_dir = $work_dir . '/layout';
@@ -99,16 +114,27 @@ function extractImagePlaceholders($work_dir, $deployer)
         
         if (preg_match_all('/\{\{([^}]+(?:_BG|_PHOTO|_IMG|_IMAGE|_LOGO|_ICON))\}\}/', $content, $matches)) {
             foreach ($matches[1] as $placeholder) {
-                $key = $template_name . '_' . strtolower(str_replace('_', '-', $placeholder));
+                $key = $job_id . '_' . $template_name . '_' . strtolower(str_replace('_', '-', $placeholder));
+                
+                // 根據佔位符類型推斷容器類型
+                $container_type = getContainerTypeFromPlaceholder($placeholder);
+                $container_name = '';
+                
+                // 從 layout_selection 中找到對應的容器
+                if (isset($page_container_map[$template_name][$container_type])) {
+                    $container_name = $page_container_map[$template_name][$container_type];
+                }
                 
                 $placeholders[$key] = [
                     'placeholder' => $placeholder,
                     'template' => $template_name,
                     'type' => 'page',
-                    'file' => $file
+                    'file' => $file,
+                    'container_type' => $container_type,
+                    'container_name' => $container_name
                 ];
                 
-                $deployer->log("  發現頁面圖片佔位符: {{$placeholder}} 在 $template_name");
+                $deployer->log("  發現頁面圖片佔位符: {{$placeholder}} 在 $template_name (容器: $container_name)");
             }
         }
     }
@@ -124,16 +150,22 @@ function extractImagePlaceholders($work_dir, $deployer)
             
             if (preg_match_all('/\{\{([^}]+(?:_BG|_PHOTO|_IMG|_IMAGE|_LOGO|_ICON))\}\}/', $content, $matches)) {
                 foreach ($matches[1] as $placeholder) {
-                    $key = $template_name . '_' . strtolower(str_replace('_', '-', $placeholder));
+                    $key = $job_id . '_' . $template_name . '_' . strtolower(str_replace('_', '-', $placeholder));
+                    
+                    // 全域模板的容器名稱就是模板名稱本身
+                    $container_type = getContainerTypeFromPlaceholder($placeholder);
+                    $container_name = $template_name; // 例如 footer-001, header-001
                     
                     $placeholders[$key] = [
                         'placeholder' => $placeholder,
                         'template' => $template_name,
                         'type' => 'global',
-                        'file' => $file
+                        'file' => $file,
+                        'container_type' => $container_type,
+                        'container_name' => $container_name
                     ];
                     
-                    $deployer->log("  發現全域圖片佔位符: {{$placeholder}} 在 $template_name");
+                    $deployer->log("  發現全域圖片佔位符: {{$placeholder}} 在 $template_name (容器: $container_name)");
                 }
             }
         }
@@ -143,51 +175,198 @@ function extractImagePlaceholders($work_dir, $deployer)
 }
 
 /**
+ * 根據佔位符名稱推斷容器類型
+ */
+function getContainerTypeFromPlaceholder($placeholder)
+{
+    // 根據佔位符名稱推斷容器類型
+    if (strpos($placeholder, 'HERO_') === 0) {
+        return 'hero';
+    } elseif (strpos($placeholder, 'ABOUT_') === 0) {
+        return 'about';
+    } elseif (strpos($placeholder, 'SERVICE_') === 0) {
+        return 'service';
+    } elseif (strpos($placeholder, 'CONTACT_') === 0) {
+        return 'contact';
+    } elseif (strpos($placeholder, 'CTA_') === 0) {
+        return 'cta';
+    } elseif (strpos($placeholder, 'FAQ_') === 0) {
+        return 'faq';
+    } elseif (strpos($placeholder, 'ARCHIVE_') === 0) {
+        return 'archive';
+    } elseif (strpos($placeholder, 'FOOTER_') === 0) {
+        return 'footer';
+    } elseif (strpos($placeholder, 'HEADER_') === 0) {
+        return 'header';
+    } else {
+        // 如果無法識別，嘗試從更寬泛的規則推斷
+        if (strpos($placeholder, '_BG') !== false) {
+            return 'hero'; // 背景圖通常用於 hero 區塊
+        } elseif (strpos($placeholder, '_PHOTO') !== false || strpos($placeholder, '_IMAGE') !== false) {
+            return 'about'; // 照片和圖片通常用於 about 或 service
+        } else {
+            return 'unknown';
+        }
+    }
+}
+
+/**
+ * 從容器資訊清單中取得容器資訊
+ */
+function getContainerInfo($container_name, $container_manifest)
+{
+    if (empty($container_manifest) || empty($container_name) || $container_name === 'unknown') {
+        return [];
+    }
+    
+    // 搜尋容器資訊
+    foreach ($container_manifest as $category => $containers) {
+        if (is_array($containers)) {
+            foreach ($containers as $container_id => $container_data) {
+                if ($container_id === $container_name) {
+                    return $container_data;
+                }
+            }
+        }
+    }
+    
+    return [];
+}
+
+/**
  * 使用 AI 生成圖片提示詞
  */
-function generateImagePrompts($placeholders, $site_config, $ai_service, $config, $deployer)
+function generateImagePrompts($placeholders, $work_dir, $ai_service, $config, $deployer)
 {
-    $brand_info = [
-        'name' => $site_config['site_title'] ?? '網站',
-        'description' => $site_config['site_description'] ?? '',
-        'tone' => $site_config['brand_tone'] ?? '專業、親和',
-        'target_audience' => $site_config['target_audience'] ?? '一般用戶'
-    ];
+    // 載入處理後的資料以獲取完整品牌資訊
+    $processed_data_file = $work_dir . '/config/processed_data.json';
+    $site_config_file = $work_dir . '/json/site-config.json';
+    $container_manifest_file = $work_dir . '/json/container_manifest.json';
     
+    // 載入容器資訊清單
+    $container_manifest = [];
+    if (file_exists($container_manifest_file)) {
+        $container_manifest = json_decode(file_get_contents($container_manifest_file), true);
+    }
+    
+    if (file_exists($processed_data_file)) {
+        $processed_data = json_decode(file_get_contents($processed_data_file), true);
+        $site_config = file_exists($site_config_file) ? json_decode(file_get_contents($site_config_file), true) : [];
+        
+        // 從 processed_data.json 讀取完整品牌資訊
+        $brand_info = [
+            'name' => $processed_data['website_name'] ?? $site_config['site_title'] ?? '網站',
+            'description' => $processed_data['website_description'] ?? $site_config['site_description'] ?? '',
+            'brand_personality' => $processed_data['confirmed_data']['brand_personality'] ?? '專業、親和',
+            'target_audience' => $processed_data['confirmed_data']['target_audience'] ?? $site_config['target_audience'] ?? '一般用戶',
+            'brand_keywords' => $processed_data['confirmed_data']['brand_keywords'] ?? [],
+            'unique_value' => $processed_data['confirmed_data']['unique_value'] ?? '',
+            'color_scheme' => $processed_data['confirmed_data']['color_scheme'] ?? []
+        ];
+    } else {
+        // 如果找不到 processed_data.json，使用 site_config 作為備用
+        $site_config = file_exists($site_config_file) ? json_decode(file_get_contents($site_config_file), true) : [];
+        $brand_info = [
+            'name' => $site_config['site_title'] ?? '網站',
+            'description' => $site_config['site_description'] ?? '',
+            'brand_personality' => $site_config['brand_tone'] ?? '專業、親和',
+            'target_audience' => $site_config['target_audience'] ?? '一般用戶',
+            'brand_keywords' => [],
+            'unique_value' => '',
+            'color_scheme' => []
+        ];
+    }
+    
+    // 將品牌關鍵字轉換為字串
+    $keywords_str = is_array($brand_info['brand_keywords']) ? implode('、', $brand_info['brand_keywords']) : $brand_info['brand_keywords'];
+    
+    // 將色彩方案轉換為描述
+    $color_description = '';
+    if (!empty($brand_info['color_scheme'])) {
+        $colors = [];
+        if (isset($brand_info['color_scheme']['primary'])) {
+            $colors[] = "primary color " . $brand_info['color_scheme']['primary'];
+        }
+        if (isset($brand_info['color_scheme']['secondary'])) {
+            $colors[] = "secondary color " . $brand_info['color_scheme']['secondary'];
+        }
+        if (isset($brand_info['color_scheme']['accent'])) {
+            $colors[] = "accent color " . $brand_info['color_scheme']['accent'];
+        }
+        $color_description = !empty($colors) ? implode(', ', $colors) : 'professional color palette';
+    } else {
+        $color_description = 'professional color palette';
+    }
+
     $prompt = "你是一位專業的圖片提示詞生成師。請根據以下品牌資訊，為每個圖片佔位符生成詳細的英文圖片提示詞。
 
 ## 品牌資訊
 - 品牌名稱：{$brand_info['name']}
 - 品牌描述：{$brand_info['description']}
-- 品牌調性：{$brand_info['tone']}
+- 品牌個性：{$brand_info['brand_personality']}
 - 目標受眾：{$brand_info['target_audience']}
+- 品牌關鍵字：{$keywords_str}
+- 獨特價值：{$brand_info['unique_value']}
+- 色彩方案：{$color_description}
 
-## 圖片佔位符清單
+## 圖片佔位符清單與其所在的佈局情境
+你必須根據每個佔位符所在的「容器描述」，來生成最匹配該佈局風格的圖片。
 ";
 
     foreach ($placeholders as $key => $info) {
-        $prompt .= "- {$key}: 佔位符 {{" . $info['placeholder'] . "}} 在 " . $info['template'] . " 模板中\n";
+        $container_name = $info['container_name'] ?? 'unknown';
+        $container_info = getContainerInfo($container_name, $container_manifest);
+        
+        $prompt .= "- {$key}:\n";
+        $prompt .= "  - 佔位符: {{" . $info['placeholder'] . "}}\n";
+        $prompt .= "  - 所在模板: " . $info['template'] . "\n";
+        $prompt .= "  - 所在容器: {$container_name}\n";
+        
+        if (!empty($container_info)) {
+            $prompt .= "  - 容器描述: \"" . ($container_info['description'] ?? '標準容器佈局') . "\"\n";
+            $prompt .= "  - 容器風格: " . json_encode($container_info['style'] ?? ['professional']) . "\n";
+        } else {
+            $prompt .= "  - 容器描述: \"標準容器佈局\"\n";
+            $prompt .= "  - 容器風格: [\"professional\"]\n";
+        }
+        $prompt .= "\n";
     }
 
     $prompt .= "
 ## 生成要求
 1. 每個圖片提示詞要具體詳細，包含風格、顏色、構圖等
 2. 提示詞必須是英文
-3. 避免包含文字或品牌名稱
-4. 針對不同類型的佔位符生成相應風格：
-   - _BG (背景): 抽象或場景背景
-   - _PHOTO (照片): 人物或產品照片
-   - _IMG/_IMAGE (圖片): 一般圖片
-   - _LOGO (標誌): 簡約標誌設計
-   - _ICON (圖示): 簡單圖示
+3. 【重要】每個提示詞結尾必須加上 \"no text, no words, no letters, purely visual imagery\"
+4. 必須融入上述品牌色彩方案中的顏色描述
+5. 必須體現品牌個性和關鍵字的視覺意象
+6. 【新增】必須根據容器描述和風格，生成最匹配該佈局環境的圖片
+7. 【新增】為每個圖片加入負面提示詞以提升品質
+8. 【新增】維持整體視覺風格一致性，除非容器類型有特殊需求
+9. 針對不同類型的佔位符生成相應風格：
+   - _BG (背景): 抽象或場景背景，要考慮容器的文字佈局和遮罩需求
+   - _PHOTO (照片): 符合目標受眾特徵的人物或場景，體現品牌個性
+   - _IMG/_IMAGE (圖片): 與服務內容和品牌關鍵字相關的視覺元素
+   - _LOGO (標誌): 簡約但包含品牌特色的設計元素
+   - _ICON (圖示): 與品牌關鍵字相關的簡單圖示
+
+## 範例格式（請參考但不要照抄）
+針對療癒心理學品牌的沉浸式 Hero 背景：
+\"home_hero-bg\": {
+    \"prompt\": \"Peaceful forest scene with soft morning light filtering through trees, mint green and warm beige color palette (#A8CBB7, #F6E8D6), calming healing atmosphere, cinematic composition with center focus area for text overlay, natural therapeutic environment, no text, no words, no letters, purely visual imagery\",
+    \"negative_prompt\": \"blurry, cartoon, 3d render, watermark, text, words, letters, busy composition, harsh lighting\",
+    \"style\": \"cinematic\",
+    \"size\": \"1312x736\",
+    \"quality\": \"standard\"
+}
 
 請以 JSON 格式回應，格式如下：
 {
     \"key1\": {
-        \"prompt\": \"詳細英文提示詞\",
-        \"style\": \"攝影風格如 professional/abstract/minimalist\",
+        \"prompt\": \"詳細英文提示詞（必須包含品牌色彩、容器適配和結尾的無文字聲明）\",
+        \"negative_prompt\": \"負面提示詞以提升圖片品質\",
+        \"style\": \"攝影風格如 professional/abstract/minimalist/natural/cinematic\",
         \"size\": \"根據圖片類型選擇適當尺寸：背景圖(_BG)使用1312x736(16:9)，人像照片(_PHOTO)使用1024x1024(1:1)，圖示(_ICON)使用1024x1024(1:1)，標誌(_LOGO)使用1280x800(16:10)\",
-        \"quality\": \"high\"
+        \"quality\": \"standard\"
     }
 }
 
@@ -234,32 +413,38 @@ function generateDefaultImagePrompts($placeholders)
         $placeholder = $info['placeholder'];
         
         if (strpos($placeholder, '_BG') !== false) {
-            $prompt = "Abstract background image, professional design, soft gradient colors, modern minimalist style";
+            $prompt = "Abstract background image, professional design, soft gradient colors, modern minimalist style, no text, no words, no letters, purely visual imagery";
+            $negative_prompt = "blurry, cartoon, 3d render, watermark, text, words, letters";
             $style = "abstract";
             $size = "1312x736"; // 16:9 適合背景圖
         } elseif (strpos($placeholder, '_PHOTO') !== false) {
-            $prompt = "Professional portrait photography, natural lighting, warm atmosphere, business casual";
+            $prompt = "Professional portrait photography, natural lighting, warm atmosphere, business casual, no text, no words, no letters, purely visual imagery";
+            $negative_prompt = "blurry, amateur, bad lighting, text, words, letters";
             $style = "professional";
             $size = "1024x1024"; // 1:1 適合人像照片
         } elseif (strpos($placeholder, '_LOGO') !== false) {
-            $prompt = "Minimalist logo design, clean simple shapes, professional brand identity, transparent background";
+            $prompt = "Minimalist logo design, clean simple shapes, professional brand identity, transparent background, no text, no words, no letters, purely visual imagery";
+            $negative_prompt = "complex, cluttered, text, words, letters, realistic";
             $style = "minimalist";
             $size = "1280x800"; // 16:10 適合標誌
         } elseif (strpos($placeholder, '_ICON') !== false) {
-            $prompt = "Simple icon design, line art style, professional clean, minimalist";
+            $prompt = "Simple icon design, line art style, professional clean, minimalist, no text, no words, no letters, purely visual imagery";
+            $negative_prompt = "complex, detailed, text, words, letters, realistic";
             $style = "minimalist";
             $size = "1024x1024"; // 1:1 適合圖示
         } else {
-            $prompt = "Professional image, high quality, modern design, clean composition";
+            $prompt = "Professional image, high quality, modern design, clean composition, no text, no words, no letters, purely visual imagery";
+            $negative_prompt = "blurry, amateur, text, words, letters";
             $style = "professional";
             $size = "1024x1024"; // 預設 1:1
         }
         
         $prompts[$key] = [
             'prompt' => $prompt,
+            'negative_prompt' => $negative_prompt,
             'style' => $style,
             'size' => $size,
-            'quality' => 'high'
+            'quality' => 'standard' // 使用 standard 以啟用 TURBO 模式節省成本
         ];
     }
     
@@ -563,7 +748,7 @@ function generateImageWithIdeogram($prompt, $size, $quality, $ideogram_config, $
         }
     }
     
-    // 設定渲染速度
+    // 設定渲染速度 - 優化成本：預設使用 TURBO 模式（$0.025-0.04/圖），只有明確要求 high 才使用 DEFAULT（$0.08/圖）
     $rendering_speed = $quality === 'high' ? 'DEFAULT' : 'TURBO';
     
     // 準備 multipart form data
@@ -708,22 +893,42 @@ function buildImageMapping($generated_images, $placeholders, $deployer)
     $mapping = [];
     
     foreach ($generated_images as $key => $filename) {
-        // 為 step-11 和 step-12 建立多種格式的 key
+        // 從新格式 key 中提取頁面名稱和佔位符
+        // 新格式: job_id_template_placeholder
+        $parts = explode('_', $key);
+        if (count($parts) >= 3) {
+            $template_name = $parts[1]; // 頁面名稱（如 home, about）
+            $placeholder_parts = array_slice($parts, 2); // 佔位符部分
+            $placeholder_name = strtoupper(str_replace('-', '_', implode('_', $placeholder_parts))); // 轉換為大寫佔位符
+            
+            // 為 step-12 建立分組結構（按頁面分組）
+            if (!isset($mapping[$template_name])) {
+                $mapping[$template_name] = [];
+            }
+            
+            $mapping[$template_name][$placeholder_name] = "/wp-content/uploads/ai-generated/$filename";
+            
+            $deployer->log("建立分組圖片映射: {$template_name}[{$placeholder_name}] -> /wp-content/uploads/ai-generated/$filename");
+        }
+    }
+    
+    // 為向後相容，建立平面結構的映射（使用不同的key以避免衝突）
+    foreach ($generated_images as $key => $filename) {
         $base_name = pathinfo($filename, PATHINFO_FILENAME);
         
-        // 格式 1: 原始 key (step-12 主要使用)
-        $mapping[$key] = "/wp-content/uploads/ai-generated/$filename";
+        // 格式 1: 原始 key (step-11 主要使用) - 使用 '_file_' 前綴避免與頁面名稱衝突
+        $mapping['_file_' . $key] = "/wp-content/uploads/ai-generated/$filename";
         
-        // 格式 2: 只有檔名 (step-12 備用)
-        $mapping[$base_name] = "/wp-content/uploads/ai-generated/$filename";
+        // 格式 2: 只有檔名 (備用)
+        $mapping['_file_' . $base_name] = "/wp-content/uploads/ai-generated/$filename";
         
-        // 格式 3: 轉換底線為連字號 (step-12 可能需要)
+        // 格式 3: 轉換底線為連字號 (備用)
         $hyphen_key = str_replace('_', '-', $key);
         if ($hyphen_key !== $key) {
-            $mapping[$hyphen_key] = "/wp-content/uploads/ai-generated/$filename";
+            $mapping['_file_' . $hyphen_key] = "/wp-content/uploads/ai-generated/$filename";
         }
         
-        $deployer->log("建立圖片映射: $key -> /wp-content/uploads/ai-generated/$filename");
+        $deployer->log("建立平面圖片映射: _file_$key -> /wp-content/uploads/ai-generated/$filename");
     }
     
     return $mapping;

@@ -244,6 +244,63 @@ function executeOtherConfigurations($wp_cli, $processed_data, $deployer)
         $time_format_result = $wp_cli->execute("option update time_format 'H:i'");
         $results['time_format'] = $time_format_result['return_code'] === 0;
         
+        // Elementor 相關設定
+        $deployer->log("設定 Elementor 相關選項...");
+        
+        // 設定 CSS 輸出方式為外部檔案
+        $elementor_css_result = $wp_cli->execute("option update elementor_css_print_method 'external'");
+        $results['elementor_css_print_method'] = $elementor_css_result['return_code'] === 0;
+        if ($results['elementor_css_print_method']) {
+            $deployer->log("✅ Elementor CSS 輸出方式設定為外部檔案");
+        } else {
+            $deployer->log("❌ Elementor CSS 輸出方式設定失敗");
+        }
+        
+        // 關閉圖片最佳化載入
+        $elementor_image_loading_result = $wp_cli->execute("option update elementor_optimized_image_loading 0");
+        $results['elementor_optimized_image_loading'] = $elementor_image_loading_result['return_code'] === 0;
+        if ($results['elementor_optimized_image_loading']) {
+            $deployer->log("✅ Elementor 圖片最佳化載入已關閉");
+        } else {
+            $deployer->log("❌ Elementor 圖片最佳化載入設定失敗");
+        }
+        
+        // 關閉 Gutenberg 最佳化載入
+        $elementor_gutenberg_result = $wp_cli->execute("option update elementor_optimized_gutenberg_loading 0");
+        $results['elementor_optimized_gutenberg_loading'] = $elementor_gutenberg_result['return_code'] === 0;
+        if ($results['elementor_optimized_gutenberg_loading']) {
+            $deployer->log("✅ Elementor Gutenberg 最佳化載入已關閉");
+        } else {
+            $deployer->log("❌ Elementor Gutenberg 最佳化載入設定失敗");
+        }
+        
+        // 關閉背景圖片延遲載入
+        $elementor_lazy_bg_result = $wp_cli->execute("option update elementor_lazy_load_background_images 0");
+        $results['elementor_lazy_load_background_images'] = $elementor_lazy_bg_result['return_code'] === 0;
+        if ($results['elementor_lazy_load_background_images']) {
+            $deployer->log("✅ Elementor 背景圖片延遲載入已關閉");
+        } else {
+            $deployer->log("❌ Elementor 背景圖片延遲載入設定失敗");
+        }
+        
+        // 關閉元素快取
+        $elementor_cache_result = $wp_cli->execute("option update elementor_element_cache_ttl 'disable'");
+        $results['elementor_element_cache_ttl'] = $elementor_cache_result['return_code'] === 0;
+        if ($results['elementor_element_cache_ttl']) {
+            $deployer->log("✅ Elementor 元素快取已停用");
+        } else {
+            $deployer->log("❌ Elementor 元素快取設定失敗");
+        }
+        
+        // 清除 Elementor CSS 快取
+        $elementor_flush_result = $wp_cli->execute("elementor flush-css");
+        $results['elementor_flush_css'] = $elementor_flush_result['return_code'] === 0;
+        if ($results['elementor_flush_css']) {
+            $deployer->log("✅ Elementor CSS 快取已清除");
+        } else {
+            $deployer->log("❌ Elementor CSS 快取清除失敗");
+        }
+        
         $deployer->log("其他配置設定完成");
         
     } catch (Exception $e) {
