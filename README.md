@@ -21,22 +21,33 @@
 ## 檔案結構
 
 ```
-local/
+contenta-auto/
 ├── contenta-deploy.php          # 主部署腳本
 ├── config-manager.php           # 配置管理系統
-├── step-00.php ~ step-19.php    # 20個部署步驟
+├── step-00.php ~ step-19.php    # 部署步驟腳本
 ├── test-deploy.php              # 測試腳本
-├── create-remaining-steps.php   # 批量建立步驟檔案
 ├── config/                      # 配置目錄
-│   ├── deploy-config.json       # 主配置檔案（自動生成）
+│   ├── deploy-config.json       # 主配置檔案
 │   └── deploy-config-example.json # 配置範例
 ├── data/                        # 用戶資料目錄
+│   └── {job_id}/                # 每個 job 的資料夾
+│       ├── {job_id}.json        # 用戶資料
+│       └── *.docx, *.txt        # 訪談記錄等附件
 ├── json/                        # 參考模板
 │   ├── site-config.json         # 網站配置模板
 │   ├── image-prompts.json       # 圖片生成提示詞
 │   └── article-prompts.json     # 文章生成提示詞
+├── template/                    # 模板檔案
+│   ├── container/               # 容器模板
+│   └── global/                  # 全域模板
+├── includes/                    # 工具類別
+│   └── utilities/               # 實用程式
 ├── logs/                        # 日誌目錄（自動生成）
 └── temp/                        # 臨時工作目錄（自動生成）
+    └── {job_id}/                # 每個 job 的工作目錄
+        ├── json/                # 生成的配置檔案
+        ├── layout/              # 處理後的模板
+        └── images/              # 生成的圖片
 ```
 
 ## 快速開始
@@ -81,7 +92,7 @@ cp config/deploy-config-example.json config/deploy-config.json
 ### 4. 執行部署
 
 ```bash
-php contenta-deploy.php [job_id] [--step=XX]
+php contenta-deploy.php [job_id] [--step=XX] [--ai=SERVICE]
 ```
 
 例如：
@@ -94,9 +105,33 @@ php contenta-deploy.php 2506290730-3450 --step=03
 
 # 從步驟10開始執行（跳過前面的步驟）
 php contenta-deploy.php 2506290730-3450 --step=10
+
+# 指定使用 Gemini AI 服務執行 step-08
+php contenta-deploy.php 2506290730-3450 --step=08 --ai=gemini
+
+# 指定使用 OpenAI 服務執行 step-08
+php contenta-deploy.php 2506290730-3450 --step=08 --ai=openai
 ```
 
-### 5. 檢查日誌
+### 5. AI 服務選擇
+
+系統支援多種 AI 服務，可透過 `--ai=` 參數指定：
+
+```bash
+# 使用 Gemini（建議用於中文內容生成）
+php contenta-deploy.php [job_id] --step=08 --ai=gemini
+
+# 使用 OpenAI（預設選項）
+php contenta-deploy.php [job_id] --step=08 --ai=openai
+```
+
+**建議使用場景：**
+- **Step 08 (配置生成)**：建議使用 `--ai=gemini`，中文內容生成品質更佳
+- **Step 09 (文案填充)**：兩者皆可，依據個人偏好
+- **Step 10 (圖片生成)**：自動使用 Ideogram（成本最優）
+- **Step 15 (文章生成)**：建議使用 `--ai=gemini`，文章結構更完整
+
+### 6. 檢查日誌
 
 每個 job 都會建立專用的日誌檔案：
 
@@ -120,37 +155,40 @@ tail -f logs/deploy-2025-06-30.log
 | 05 | 資料庫建立 | MySQL 資料庫和用戶建立 |
 | 06 | WordPress 下載安裝 | WP-CLI 自動安裝 |
 | 07 | 外掛主題部署與啟用 | 使用 rsync 同步 wp-content/plugins 和 themes、清理預設主題、先啟用 16 個指定外掛、啟用主題、建立專用管理員帳號、啟用 Elementor Pro 和 FlyingPress 授權 |
-| 08 | AI 配置檔案生成 | 使用 AI 生成網站配置和內容提示詞 |
-| 09 | AI 文字替換與頁面生成 | 處理頁面模板和全域模板的佔位符替換 |
-| 10 | AI 圖片生成與路徑替換 | 使用 OpenAI DALL-E 3 或 Gemini 生成圖片 |
-| 11 | 用戶角色設定 | 自訂用戶角色 |
-| 12 | 用戶帳號建立 | 建立客戶帳號 |
+| 08 | AI 網站配置生成 | 使用 AI 生成 site-config.json 和 article-prompts.json 配置檔案 |
+| 09 | 頁面組裝與 AI 文案填充 | 合併 template/container 檔案，生成 text-mapping.json，AI 填充所有頁面文案 |
+| 10 | 圖片佔位符識別與 AI 圖片生成 | 掃描 *-ai.json 檔案中的圖片佔位符，生成 AI 圖片並建立 image-mapping.json |
+| 11 | WordPress 圖片上傳 | 上傳 AI 生成的圖片到 WordPress 媒體庫並替換路徑 |
+| 12 | JSON 模板圖片路徑替換 | 透過 image-mapping.json 替換所有 JSON 模板中的圖片路徑 |
 | 13 | 網站管理員信箱設定 | 更新管理員信箱 |
 | 14 | Elementor 版型匯入 | 匯入頁面版型 |
-| 15 | 頁面生成 | 根據配置生成頁面 |
+| 15 | AI 文章與精選圖片生成 | 循環生成 WordPress 文章，並為每篇文章生成精選圖片 |
 | 16 | 選單導航建立 | 建立網站選單 |
-| 17 | 網站選項匯入 | 匯入網站設定 |
-| 18 | AI 圖片生成 | 生成並上傳圖片 |
-| 19 | AI 文章生成 | 生成 DEMO 文章 |
+| 17 | 最終配置與 Elementor 設定 | 完成最終配置設定，包含 Elementor 相關設定 |
+| 18 | (未使用) | 此步驟目前未使用 |
+| 19 | (未使用) | 此步驟目前未使用 |
 
 ## 必要外掛清單
 
 系統會自動安裝以下外掛：
 
-- Advanced Custom Fields
-- Auto Upload Images
-- Better Search Replace
-- Contact Form 7
-- Elementor & Elementor Pro
-- Flying Press
-- One User Avatar
-- Performance Lab
-- Astra Pro Sites
-- Rank Math SEO & Pro
-- Google Site Kit
-- Header Footer Elementor
-- Ultimate Elementor
-- Insert Headers and Footers
+- **Advanced Custom Fields** - 自訂欄位管理
+- **Auto Upload Images** - 自動上傳圖片
+- **Better Search Replace** - 搜尋取代工具
+- **Contact Form 7** - 聯絡表單
+- **Elementor & Elementor Pro** - 頁面建構器（需授權）
+- **Flying Press** - 快取與效能優化（需授權）
+- **One User Avatar** - 使用者頭像管理
+- **Performance Lab** - WordPress 效能實驗室
+- **Rank Math SEO & Pro** - SEO 優化（需授權）
+- **Shortpixel Image Optimiser** - 圖片壓縮
+- **Google Site Kit** - Google 服務整合
+- **Ultimate Elementor** - Elementor 擴充套件
+- **Insert Headers and Footers** - 頁首頁尾代碼插入
+
+**注意事項：**
+- 標示「需授權」的外掛需要在 `deploy-config.json` 中設定有效的授權金鑰
+- 所有外掛都會在步驟 07 中自動安裝和啟用
 
 ## API 整合
 
@@ -171,8 +209,15 @@ tail -f logs/deploy-2025-06-30.log
 - PHP 版本設定
 
 ### AI 服務
-- OpenAI: 文章生成、圖片生成
-- Gemini: 圖片生成、內容分析
+- **OpenAI**: 
+  - 文本生成（GPT-4o-mini）
+  - 圖片生成（DALL-E 3）
+- **Gemini**: 
+  - 文本生成（Gemini-2.0-flash-exp）
+  - 圖片生成（Imagen-3）
+- **Ideogram**: 
+  - 圖片生成（TURBO/Standard 模式）
+  - 成本最優化選項
 
 ## 日誌系統
 
