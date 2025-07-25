@@ -233,47 +233,62 @@ function generateFullAILogo($website_name, $color_scheme, $job_data, $images_dir
         
         $deployer->log("使用圖片生成服務順序: " . implode(' → ', $fallback_order));
         
-        // 構建完整Logo提示詞
-        $prompt = buildFullLogoPrompt($website_name, $color_scheme, $job_data);
+        // 從 job_data 中提取實際的網域名稱（移除.tw等後綴）
+        $confirmed_data = $job_data['confirmed_data'] ?? [];
+        $domain = $confirmed_data['domain'] ?? $website_name;
+        $domain_name = preg_replace('/\.(tw|com|org|net|info|biz)$/i', '', $domain);
         
-        $deployer->log("AI Logo提示詞: " . $prompt);
+        $deployer->log("提取的網域名稱: $domain → $domain_name");
         
-        $image_data = null;
+        // 階段1：建立基礎描述提示詞
+        $base_prompt = buildFullLogoPrompt($website_name, $color_scheme, $job_data);
+        //$deployer->log("基礎提示詞:\n" . $base_prompt);
         
-        // 根據設定的順序嘗試不同的服務
-        foreach ($fallback_order as $service) {
-            if ($image_data) break; // 如果已成功生成，跳出迴圈
+        // 階段2：使用Gemini優化提示詞
+        $optimized_prompt = null;
+        if (isset($api_credentials['gemini']['api_key']) && !empty($api_credentials['gemini']['api_key'])) {
+            //$deployer->log("使用Gemini優化提示詞...");
+            $optimized_prompt = optimizePromptWithGemini($base_prompt, $api_credentials['gemini'], $deployer);
             
-            switch ($service) {
-                case 'openai':
-                    if (isset($api_credentials['openai']['api_key']) && !empty($api_credentials['openai']['api_key'])) {
-                        $deployer->log("嘗試使用 OpenAI 生成完整Logo");
-                        $image_data = callOpenAIImageGeneration($prompt, $api_credentials['openai'], $deployer);
-                        if (!$image_data && count($fallback_order) > 1) {
-                            $deployer->log("🔄 OpenAI 失敗");
+            if ($optimized_prompt) {
+                $deployer->log("Gemini優化後的提示詞:\n" . $optimized_prompt);
+            } else {
+                $deployer->log("Gemini優化失敗，使用原始提示詞");
+                $optimized_prompt = $base_prompt;
+            }
+        } else {
+            $deployer->log("Gemini API未配置，使用原始提示詞");
+            $optimized_prompt = $base_prompt;
+        }
+        
+        // 階段3：使用Ideogram生成圖片
+        $image_data = null;
+        if (isset($api_credentials['ideogram']['api_key']) && !empty($api_credentials['ideogram']['api_key'])) {
+            $deployer->log("使用Ideogram生成Logo...");
+            $image_data = callIdeogramImageGeneration($optimized_prompt, $api_credentials['ideogram'], $deployer);
+        }
+        
+        // 備用方案：如果Ideogram失敗，嘗試其他服務
+        if (!$image_data) {
+            $deployer->log("Ideogram失敗，嘗試備用方案...");
+            foreach ($fallback_order as $service) {
+                if ($image_data) break;
+                
+                switch ($service) {
+                    case 'openai':
+                        if (isset($api_credentials['openai']['api_key']) && !empty($api_credentials['openai']['api_key'])) {
+                            $deployer->log("嘗試使用 OpenAI");
+                            $image_data = callOpenAIImageGeneration($optimized_prompt, $api_credentials['openai'], $deployer);
                         }
-                    }
-                    break;
-                    
-                case 'ideogram':
-                    if (isset($api_credentials['ideogram']['api_key']) && !empty($api_credentials['ideogram']['api_key'])) {
-                        $deployer->log("嘗試使用 Ideogram 生成完整Logo");
-                        $image_data = callIdeogramImageGeneration($prompt, $api_credentials['ideogram'], $deployer);
-                        if (!$image_data && count($fallback_order) > 1) {
-                            $deployer->log("🔄 Ideogram 失敗");
+                        break;
+                        
+                    case 'gemini':
+                        if ($service !== 'ideogram' && isset($api_credentials['gemini']['api_key']) && !empty($api_credentials['gemini']['api_key'])) {
+                            $deployer->log("嘗試使用 Gemini");
+                            $image_data = callGeminiImageGeneration($optimized_prompt, $api_credentials['gemini'], $deployer);
                         }
-                    }
-                    break;
-                    
-                case 'gemini':
-                    if (isset($api_credentials['gemini']['api_key']) && !empty($api_credentials['gemini']['api_key'])) {
-                        $deployer->log("嘗試使用 Gemini 生成完整Logo");
-                        $image_data = callGeminiImageGeneration($prompt, $api_credentials['gemini'], $deployer);
-                        if (!$image_data && count($fallback_order) > 1) {
-                            $deployer->log("🔄 Gemini 失敗");
-                        }
-                    }
-                    break;
+                        break;
+                }
             }
         }
         
@@ -289,8 +304,34 @@ function generateFullAILogo($website_name, $color_scheme, $job_data, $images_dir
             throw new Exception("無法儲存AI Logo");
         }
         
+        // 使用 rembg 進行去背處理
+        $deployer->log("使用 rembg 進行去背處理...");
+        $ai_logo_rembg_filename = 'ai-logo-full-remover.png';
+        $ai_logo_rembg_path = $images_dir . '/' . $ai_logo_rembg_filename;
+        
+        $rembg_command = "/bin/zsh -c 'source ~/.zshrc && rembg i -m isnet-general-use " . escapeshellarg($ai_logo_path) . " " . escapeshellarg($ai_logo_rembg_path) . "'";
+        exec($rembg_command . " 2>&1", $output, $return_var);
+        
+        if ($return_var !== 0) {
+            $deployer->log("rembg 去背失敗: " . implode("\n", $output));
+            $deployer->log("將使用原始圖片繼續處理");
+            $logo_to_resize = $ai_logo_path;
+        } else {
+            $deployer->log("去背處理成功: $ai_logo_rembg_filename");
+            // 檢查去背後的檔案是否存在
+            if (file_exists($ai_logo_rembg_path)) {
+                $logo_to_resize = $ai_logo_rembg_path;
+                // 顯示檔案大小
+                $file_size = formatFileSize(filesize($ai_logo_rembg_path));
+                $deployer->log("去背後檔案大小: $file_size");
+            } else {
+                $deployer->log("去背檔案不存在，使用原始圖片");
+                $logo_to_resize = $ai_logo_path;
+            }
+        }
+        
         // 調整圖片尺寸為540x210
-        $resized_path = resizeImageTo540x210($ai_logo_path, $images_dir, $deployer);
+        $resized_path = resizeImageTo540x210($logo_to_resize, $images_dir, $deployer);
         
         // 重新命名調整後的檔案
         if ($resized_path) {
@@ -352,47 +393,131 @@ function buildFullLogoPrompt($website_name, $color_scheme, $job_data)
 {
     $primary_color = $color_scheme['primary'] ?? '#2D4C4A';
     $secondary_color = $color_scheme['secondary'] ?? '#7A8370';
-    $accent_color = $color_scheme['accent'] ?? '#BFAA96';
     
     // 取得網站描述或行業類型
-    $website_description = $job_data['confirmed_data']['website_description'] ?? '';
-    $business_type = $job_data['confirmed_data']['business_type'] ?? '';
-    $target_audience = $job_data['confirmed_data']['target_audience'] ?? '';
-    $brand_tone = $job_data['confirmed_data']['brand_tone'] ?? '';
+    $confirmed_data = $job_data['confirmed_data'] ?? [];
+    $website_description = $confirmed_data['website_description'] ?? '';
+    $brand_keywords = $confirmed_data['brand_keywords'] ?? [];
+    $business_type = $confirmed_data['business_type'] ?? '';
+    $brand_personality = $confirmed_data['brand_personality'] ?? '';
     
-    // 根據業務類型和描述選擇適合的圖形元素
-    $graphic_elements = getLogoGraphicElements($business_type, $website_description, $brand_tone);
+    $keywords_text = is_array($brand_keywords) ? implode(', ', $brand_keywords) : $brand_keywords;
     
-    // 根據業務類型選擇風格描述
-    $style_description = getLogoStyleDescription($business_type, $brand_tone);
+    // 從 domain 欄位提取網域名稱（移除.tw等後綴）
+    $domain = $confirmed_data['domain'] ?? $website_name;
+    $domain_name = preg_replace('/\.(tw|com|org|net|info|biz)$/i', '', $domain);
     
-    // 構建整合的專業 Logo 提示詞
-    $prompt = "A modern logo design featuring the text \"{$website_name}\" in a bold, geometric typeface similar to Potta One, ";
-    $prompt .= "presented in a professional and minimalist style. ";
-    $prompt .= "The characters are stacked vertically, taking up 75% of the canvas space, ";
-    $prompt .= "rendered in the primary color {$primary_color} with subtle gradients to add depth. ";
-    $prompt .= "Two thin, horizontal bars, colored {$secondary_color} and {$accent_color} respectively, ";
-    $prompt .= "extend across the bottom of the logo, creating a sense of stability and grounding the design. ";
-    $prompt .= "A transparent background allows for versatile application across various media, ";
-    $prompt .= "maintaining readability and scalability for both web and print use.";
-    
-    // 添加風格和元素描述
-    if (!empty($style_description) && !empty($graphic_elements)) {
-        $prompt .= " Style: {$style_description}, incorporating {$graphic_elements} graphic elements.";
-    }
-    
-    // 添加行業特定要求
-    if (!empty($business_type)) {
-        $industry_requirements = getIndustryRequirements($business_type);
-        if (!empty($industry_requirements)) {
-            $prompt .= " Industry specific requirements: {$industry_requirements}";
-        }
-    }
-    
-    // 添加尺寸規格
-    $prompt .= " Canvas size: 540x210 pixels, optimized for web and print applications.";
-    
+    // 建立一個簡化且更具體的基礎提示詞，讓 Gemini 依據品牌特性生成合適的 logo
+    $prompt = "Create a logo design prompt for the brand name '{$domain_name}' following this style template:
+
+Reference template:
+'A modern logo design featuring the word \"grow\" rendered in a flowing, rounded typeface with smooth organic curves that create a natural, approachable feel. The font has a subtle upward motion blur effect. The letters are a vibrant gradient of forest green to sky blue, suggesting upward movement and vitality. Below the text, a single stylized leaf subtly emerges from the base of the letter \"o\", further reinforcing the theme of growth. The background is a clean white, allowing the logo to pop and maintain a professional, minimalist aesthetic.'
+
+Brand information to incorporate:
+- Brand name: {$domain_name}
+- Business type: {$business_type}
+- Primary color: {$primary_color}
+- Secondary color: {$secondary_color}
+- Brand keywords: {$keywords_text}
+- Brand personality: {$brand_personality}
+- Description: " . mb_substr($website_description, 0, 300, 'UTF-8') . "
+
+REQUIREMENTS - Follow the exact 5-part structure:
+
+1. \"A modern logo design featuring the word '{$domain_name}' rendered in a flowing, rounded typeface with smooth organic curves that create a [feeling] feel.\"
+
+2. \"The font has a subtle [effect] effect\" - choose effects like: gentle flow, knowledge ripple, insight wave, progress motion, trust glow
+
+3. \"The letters are a vibrant gradient from {$primary_color} to {$secondary_color}, suggesting [meaning]\"
+
+4. \"[Position], a single stylized [simple_symbol] subtly emerges from [letter_location], further reinforcing the theme of [concept]\"
+   - Use ONLY simple symbols: dot, star, line, accent mark, point, node, spark, gentle curve
+   - Think Font Awesome simplicity - basic geometric shapes only
+
+5. \"The background is a clean white, allowing the logo to pop and maintain a professional, minimalist aesthetic. Canvas size: 540x210 pixels.\"
+
+CRITICAL: Keep symbols extremely simple - dots, stars, lines, basic geometric shapes only. Avoid complex technical graphics.";
+
     return $prompt;
+}
+
+/**
+ * 使用Gemini優化提示詞
+ */
+function optimizePromptWithGemini($base_prompt, $gemini_config, $deployer)
+{
+    try {
+        $api_key = $gemini_config['api_key'] ?? '';
+        if (empty($api_key)) {
+            throw new Exception("Gemini API金鑰未設定");
+        }
+        
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' . $api_key;
+        
+        $optimization_instruction = "You are a professional logo designer. Your task is to generate a logo design prompt based on the brand information provided. 
+
+First, here is the brand information and requirements:
+{$base_prompt}
+
+Now create a logo design prompt that follows this exact format:
+
+\"A modern logo design featuring the word '[brand_name]' rendered in a flowing, rounded typeface with smooth organic curves that create a [feeling] feel. The font has a subtle [effect] effect. The letters are a vibrant gradient from [primary_color] to [secondary_color], suggesting [meaning]. [Position], a single stylized [symbol] subtly emerges from [letter_location], further reinforcing the theme of [concept]. The background is a clean white, allowing the logo to pop and maintain a professional, minimalist aesthetic. Canvas size: 540x210 pixels.\"
+
+Replace the placeholders based on the brand information provided. Be creative but maintain the exact sentence structure. The result should be 2-3 sentences that paint a vivid picture of the logo.
+
+Provide ONLY the final prompt, no explanations.";
+        
+        $data = [
+            'contents' => [
+                [
+                    'parts' => [
+                        [
+                            'text' => $optimization_instruction
+                        ]
+                    ]
+                ]
+            ]
+        ];
+        
+        $json_data = json_encode($data, JSON_UNESCAPED_UNICODE);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            $deployer->log("JSON編碼錯誤: " . json_last_error_msg());
+            return null;
+        }
+        
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $url);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $json_data);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 60);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        
+        if ($http_code === 200) {
+            $result = json_decode($response, true);
+            
+            if (isset($result['candidates'][0]['content']['parts'][0]['text'])) {
+                $optimized = trim($result['candidates'][0]['content']['parts'][0]['text']);
+                // 移除可能的引號或格式化字符
+                $optimized = trim($optimized, '"\'`');
+                return $optimized;
+            }
+        }
+        
+        $deployer->log("Gemini優化失敗: HTTP $http_code");
+        if ($response) {
+            $deployer->log("Gemini錯誤回應: " . substr($response, 0, 200));
+        }
+        return null;
+        
+    } catch (Exception $e) {
+        $deployer->log("Gemini優化錯誤: " . $e->getMessage());
+        return null;
+    }
 }
 
 /**
