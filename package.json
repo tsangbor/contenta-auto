@@ -3,9 +3,15 @@
   "version": "1.0.0",
   "description": "Contenta Auto Deployment Tools",
   "scripts": {
-    "get-token": "node get-btpanel-token.js"
+    "get-token": "node get-btpanel-token.js",
+    "test-jimeng": "node test-jimeng-signature.js",
+    "test-jimeng-mcp": "node test-jimeng-mcp.js",
+    "install-jimeng-mcp": "npm install jimeng-ai-mcp"
   },
   "dependencies": {
     "playwright": "^1.40.0"
+  },
+  "optionalDependencies": {
+    "jimeng-ai-mcp": "^1.0.14"
   }
 }

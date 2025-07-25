@@ -298,6 +298,13 @@ function generateImagePrompts($placeholders, $work_dir, $ai_service, $config, $d
         $color_description = 'professional color palette';
     }
 
+    // 取得圖片風格設定
+    $image_style_config = $config->get('ai_features.image_style', []);
+    $style_preference = $image_style_config['style'] ?? 'realistic';
+    $enable_humaaans = $image_style_config['enable_humaaans'] ?? false;
+    
+    $deployer->log("圖片風格設定: {$style_preference}" . ($enable_humaaans ? " (Humaaans 已啟用)" : ""));
+
     $prompt = "你是一位專業的圖片提示詞生成師。請根據以下品牌資訊，為每個圖片佔位符生成詳細的英文圖片提示詞。
 
 ## 品牌資訊
@@ -332,32 +339,79 @@ function generateImagePrompts($placeholders, $work_dir, $ai_service, $config, $d
         $prompt .= "\n";
     }
 
-    $prompt .= "
+    // 根據風格偏好添加風格指導
+    if ($style_preference === 'humaaans' && $enable_humaaans) {
+        $style_guidance = "
+## 🎨 Humaaans 風格要求 (優先級最高)
+**必須使用 Humaaans 扁平插圖風格**，參考以下範例格式：
+
+\"A modern flat illustration in the style of humaaans, featuring minimalist characters collaborating and interacting with abstract data nodes. The scene represents interconnected systems and knowledge sharing. The background is a clean, abstract geometric composition with overlapping shapes. The entire image uses a strict and professional color palette of deep blue (#2563EB), light blue (#38BDF8), with subtle dark gray (#0F172A) accents. Clean lines, vector art aesthetic, plenty of negative space for text overlay. Purely visual imagery, no text, no words, no letters.\"
+
+### Humaaans 風格核心特徵：
+- **扁平化插圖設計** (Flat illustration)
+- **簡潔的幾何形狀和線條** (Simple geometric shapes, clean lines)
+- **友善、親和的人物形象** (Friendly, approachable character design)
+- **統一的色彩系統** (Consistent color palette)
+- **Vector art aesthetic** (向量藝術美學)
+- **Minimalist composition** (極簡構圖)
+
+### 針對不同佔位符的 Humaaans 風格指導：
+- **_BG (背景)**: \"Abstract flat illustration background in the style of humaaans, geometric shapes, clean composition suitable for text overlay\"
+- **_PHOTO (人物)**: \"Flat illustration of [character] in the style of humaaans, friendly geometric features, simple character design\"  
+- **_IMG/_IMAGE (圖片)**: \"Flat illustration in the style of humaaans featuring [subject], minimalist vector design\"
+- **_LOGO (標誌)**: \"Minimalist logo in the style of humaaans flat illustration, simple geometric elements\"
+- **_ICON (圖示)**: \"Simple flat icon in the style of humaaans, geometric design, vector art\"";
+    } else {
+        $style_guidance = "
+## 🎨 寫實攝影風格要求
+使用專業攝影風格，真實場景和人物，高品質視覺效果。";
+    }
+
+    $prompt .= $style_guidance . "
+
 ## 生成要求
-1. 每個圖片提示詞要具體詳細，包含風格、顏色、構圖等
-2. 提示詞必須是英文
-3. 【重要】每個提示詞結尾必須加上 \"no text, no words, no letters, purely visual imagery\"
-4. 必須融入上述品牌色彩方案中的顏色描述
-5. 必須體現品牌個性和關鍵字的視覺意象
-6. 【新增】必須根據容器描述和風格，生成最匹配該佈局環境的圖片
-7. 【新增】為每個圖片加入負面提示詞以提升品質
-8. 【新增】維持整體視覺風格一致性，除非容器類型有特殊需求
-9. 針對不同類型的佔位符生成相應風格：
+1. **【風格優先】**" . ($style_preference === 'humaaans' && $enable_humaaans ? " 必須嚴格遵循上述 Humaaans 風格要求" : " 使用專業攝影風格") . "
+2. 每個圖片提示詞要具體詳細，包含風格、顏色、構圖等
+3. 提示詞必須是英文
+4. 【重要】每個提示詞結尾必須加上 \"no text, no words, no letters, purely visual imagery\"
+5. 必須融入上述品牌色彩方案中的顏色描述
+6. 必須體現品牌個性和關鍵字的視覺意象
+7. 【新增】必須根據容器描述和風格，生成最匹配該佈局環境的圖片
+8. 【新增】為每個圖片加入負面提示詞以提升品質
+9. 【新增】維持整體視覺風格一致性，除非容器類型有特殊需求
+10. 針對不同類型的佔位符生成相應風格：
    - _BG (背景): 抽象或場景背景，要考慮容器的文字佈局和遮罩需求
    - _PHOTO (照片): 符合目標受眾特徵的人物或場景，體現品牌個性
    - _IMG/_IMAGE (圖片): 與服務內容和品牌關鍵字相關的視覺元素
    - _LOGO (標誌): 簡約但包含品牌特色的設計元素
    - _ICON (圖示): 與品牌關鍵字相關的簡單圖示
 
-## 範例格式（請參考但不要照抄）
-針對療癒心理學品牌的沉浸式 Hero 背景：
+## 範例格式（請參考但不要照抄）" . 
+    ($style_preference === 'humaaans' && $enable_humaaans ? "
+### Humaaans 風格範例：
 \"home_hero-bg\": {
-    \"prompt\": \"Peaceful forest scene with soft morning light filtering through trees, mint green and warm beige color palette (#A8CBB7, #F6E8D6), calming healing atmosphere, cinematic composition with center focus area for text overlay, natural therapeutic environment, no text, no words, no letters, purely visual imagery\",
+    \"prompt\": \"A modern flat illustration in the style of humaaans, featuring minimalist characters collaborating and interacting with abstract data nodes. The scene represents interconnected systems and knowledge sharing. The background is a clean, abstract geometric composition with overlapping shapes. The entire image uses the brand color palette of {$color_description}. Clean lines, vector art aesthetic, plenty of negative space for text overlay, no text, no words, no letters, purely visual imagery\",
+    \"negative_prompt\": \"realistic, photographic, 3d render, watermark, text, words, letters, busy composition, harsh shadows\",
+    \"style\": \"flat illustration\",
+    \"size\": \"1312x736\",
+    \"quality\": \"standard\"
+}
+
+\"about_hero-photo\": {
+    \"prompt\": \"Flat illustration of a friendly professional consultant in the style of humaaans, simple geometric facial features, wearing business casual attire, modern office background with abstract geometric elements, {$color_description}, minimalist character design, approachable and trustworthy appearance, no text, no words, no letters, purely visual imagery\",
+    \"negative_prompt\": \"realistic, photographic, detailed facial features, 3d render, watermark, text, words, letters\",
+    \"style\": \"flat illustration\",
+    \"size\": \"1024x1024\",
+    \"quality\": \"standard\"
+}" : "
+### 寫實攝影風格範例：
+\"home_hero-bg\": {
+    \"prompt\": \"Peaceful forest scene with soft morning light filtering through trees, {$color_description}, calming healing atmosphere, cinematic composition with center focus area for text overlay, natural therapeutic environment, no text, no words, no letters, purely visual imagery\",
     \"negative_prompt\": \"blurry, cartoon, 3d render, watermark, text, words, letters, busy composition, harsh lighting\",
     \"style\": \"cinematic\",
     \"size\": \"1312x736\",
     \"quality\": \"standard\"
-}
+}")
 
 請以 JSON 格式回應，格式如下：
 {
