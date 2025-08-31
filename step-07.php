@@ -286,7 +286,6 @@ try {
         "one-user-avatar",
         "performance-lab",
         "seo-by-rank-math",
-        "seo-by-rank-math-pro",
         "shortpixel-image-optimiser",
         "google-site-kit",
         "ultimate-elementor",
@@ -349,6 +348,17 @@ try {
         }
         
         $deployer->log("Hello Elementor 設定完成 - 成功: {$hello_settings_success}, 失敗: {$hello_settings_failed}");
+        
+        // 禁用主題色彩覆蓋
+        $deployer->log("禁用主題色彩覆蓋...");
+        $color_override_result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path,
+            "cd {$document_root} && wp theme colors override disable --allow-root");
+        
+        if ($color_override_result['return_code'] === 0) {
+            $deployer->log("✓ 主題色彩覆蓋已禁用");
+        } else {
+            $deployer->log("⚠️ 禁用主題色彩覆蓋失敗: " . $color_override_result['output']);
+        }
         
         // 記錄 Hello Elementor 設定狀態
         $hello_elementor_configured = ($hello_settings_failed === 0);

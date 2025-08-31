@@ -7,7 +7,7 @@
  * 
  * @package HelloElementorChild
  * @subpackage Modules/ThemeStyleSwitcher
- * @version 1.1.1
+ * @version 1.3.0
  * @since 2.0.0
  * @author Your Name
  * 
@@ -49,6 +49,19 @@
  * 7. 🧹 清除 Elementor 快取
  *    wp theme colors clear-cache --allow-root
  *    # 清除 Elementor 檔案快取和 WordPress 物件快取
+ * 
+ * 8. ⚙️ 控制樣式覆蓋狀態
+ *    wp theme colors override status --allow-root
+ *    wp theme colors override disable --allow-root
+ *    wp theme colors override enable --allow-root
+ *    # 停用/啟用主題樣式覆蓋，讓 Elementor 全域配色正常運作
+ * 
+ * 9. 🎨 管理自訂配色 CSS
+ *    wp theme colors custom get --allow-root
+ *    wp theme colors custom set "--e-global-color-primary: #727171;" --allow-root
+ *    wp theme colors custom clear --allow-root
+ *    wp theme colors custom validate --allow-root
+ *    # 管理手動輸入的自訂配色 CSS 變數
  * 
  * === 可用配色方案列表 ===
  * 
@@ -122,6 +135,21 @@
  * - 預覽模式和批次操作
  * 
  * Changelog:
+ * 1.3.0 - 2025-07-18
+ * - 新增手動輸入自訂配色功能
+ * - 支援直接輸入 CSS 變數定義配色方案
+ * - 管理介面新增自訂配色文字框和輔助按鈕
+ * - CSS 解析和安全驗證機制
+ * - WP-CLI 新增 custom 指令管理自訂配色
+ * - 載入範例配色和格式驗證功能
+ * 
+ * 1.2.0 - 2025-07-18
+ * - 新增樣式覆蓋停用機制
+ * - 允許用戶停用主題樣式覆蓋，讓 Elementor 全域配色正常運作
+ * - 管理介面新增停用開關選項
+ * - WP-CLI 新增 override 指令控制停用/啟用狀態
+ * - 修正 current 指令的變數名稱錯誤
+ * 
  * 1.1.1 - 2025-07-07
  * - 新增完整 WP-CLI 指令使用指南
  * - 詳細的配色方案和字體選項說明
@@ -408,6 +436,8 @@ class ElementorThemeStyleSwitcher {
         register_setting('advanced_theme_style_settings_group', 'theme_logo_light');
         register_setting('advanced_theme_style_settings_group', 'theme_logo_dark');
         register_setting('advanced_theme_style_settings_group', 'theme_font_family');
+        register_setting('advanced_theme_style_settings_group', 'theme_style_override_disabled');
+        register_setting('advanced_theme_style_settings_group', 'theme_custom_colors_css');
     }
 
     /**
@@ -462,6 +492,39 @@ class ElementorThemeStyleSwitcher {
                             <?php $this->render_font_select(); ?>
                         </td>
                     </tr>
+                    <tr>
+                        <th scope="row">停用樣式覆蓋</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="theme_style_override_disabled" value="1" <?php checked(get_option('theme_style_override_disabled'), 1); ?> />
+                                停用主題樣式覆蓋功能
+                            </label>
+                            <p class="description">
+                                <strong>⚠️ 重要：</strong>勾選此項將停用所有主題樣式覆蓋，讓您可以在 Elementor 中自由設定全域配色。<br>
+                                停用後，主題將不會注入任何 CSS 變數覆蓋 Elementor 的全域配色設定。
+                            </p>
+                        </td>
+                    </tr>
+                    <tr id="custom_colors_row" style="<?php echo (get_option('theme_color_class', 'expert-theme-1') !== 'custom') ? 'display: none;' : ''; ?>">
+                        <th scope="row">自訂配色 CSS</th>
+                        <td>
+                            <textarea name="theme_custom_colors_css" rows="15" cols="80" class="large-text code" 
+                                      placeholder="請輸入 Elementor 全域配色的 CSS 變數定義...&#10;例如：&#10;--e-global-color-primary: #727171;&#10;--e-global-color-secondary: #B3ADA0;&#10;--e-global-color-text: #1C1C1C;&#10;--e-global-color-accent: #D56C4A;&#10;--e-global-color-background: #FCFAF2;&#10;--e-global-color-backgroundAccent: #434343;&#10;--e-global-color-transparent: #00000000;"
+                                      style="font-family: monospace; font-size: 13px;"><?php echo esc_textarea(get_option('theme_custom_colors_css', '')); ?></textarea>
+                            <p class="description">
+                                <strong>🎨 自訂配色說明：</strong>在此輸入 Elementor 全域配色的 CSS 變數定義。<br>
+                                • 每行一個 CSS 變數，格式：<code>--變數名稱: 值;</code><br>
+                                • 支援的變數：<code>--e-global-color-primary</code>、<code>--e-global-color-secondary</code> 等<br>
+                                • 顏色格式支援：十六進位 (#FFFFFF)、RGB、HSL 等<br>
+                                • 註解以 <code>/*</code> 開頭，可用於說明配色風格
+                            </p>
+                            <p>
+                                <button type="button" id="load_sample_colors" class="button">載入範例配色</button>
+                                <button type="button" id="clear_custom_colors" class="button">清空內容</button>
+                                <button type="button" id="validate_css" class="button">驗證 CSS</button>
+                            </p>
+                        </td>
+                    </tr>
                 </table>
                 
                 <?php submit_button('儲存設定'); ?>
@@ -482,6 +545,75 @@ class ElementorThemeStyleSwitcher {
             
             <script>
             jQuery(document).ready(function($) {
+                // 控制自訂配色區域的顯示/隱藏
+                $('#theme_color_class_select').on('change', function() {
+                    var selectedValue = $(this).val();
+                    if (selectedValue === 'custom') {
+                        $('#custom_colors_row').show();
+                    } else {
+                        $('#custom_colors_row').hide();
+                    }
+                });
+                
+                // 載入範例配色
+                $('#load_sample_colors').click(function() {
+                    var sampleCSS = `/* 風格：靜默的權威 (Quiet Authority) */
+--e-global-color-primary: #727171;          /* 主色: 鈍色 (Nibi-iro) - 不搶眼的標示 */
+--e-global-color-secondary: #B3ADA0;         /* 次色: 白鼠 (Shironezumi) - 更輕的層次 */
+--e-global-color-text: #1C1C1C;            /* 文字: 墨 (Sumi) - 知識的載體 */
+--e-global-color-accent: #D56C4A;           /* 點綴: 真赭 (Masoho) - 如同印章般的點睛一筆 */
+--e-global-color-background: #FCFAF2;        /* 背景: 白練 (Shironeri) - 溫潤的紙白 */
+--e-global-color-backgroundAccent: #434343; /* 區塊背景: 消炭色 (Keshizumi-iro) - 深沉的基底 */
+--e-global-color-transparent: #00000000;`;
+                    $('textarea[name="theme_custom_colors_css"]').val(sampleCSS);
+                });
+                
+                // 清空自訂配色內容
+                $('#clear_custom_colors').click(function() {
+                    if (confirm('確定要清空自訂配色內容嗎？')) {
+                        $('textarea[name="theme_custom_colors_css"]').val('');
+                    }
+                });
+                
+                // 驗證 CSS
+                $('#validate_css').click(function() {
+                    var cssContent = $('textarea[name="theme_custom_colors_css"]').val();
+                    var errors = [];
+                    
+                    if (!cssContent.trim()) {
+                        alert('請先輸入 CSS 內容');
+                        return;
+                    }
+                    
+                    // 簡單的 CSS 驗證
+                    var lines = cssContent.split('\n');
+                    var validVariables = [
+                        '--e-global-color-primary',
+                        '--e-global-color-secondary', 
+                        '--e-global-color-text',
+                        '--e-global-color-accent',
+                        '--e-global-color-background',
+                        '--e-global-color-backgroundAccent',
+                        '--e-global-color-transparent'
+                    ];
+                    
+                    lines.forEach(function(line, index) {
+                        line = line.trim();
+                        if (line && !line.startsWith('/*') && !line.startsWith('*/') && line !== '') {
+                            // 檢查是否為有效的 CSS 變數格式
+                            if (!line.match(/^--[\w-]+:\s*[^;]+;?\s*(?:\/\*.*\*\/)?$/)) {
+                                errors.push('第 ' + (index + 1) + ' 行格式不正確: ' + line);
+                            }
+                        }
+                    });
+                    
+                    if (errors.length === 0) {
+                        alert('✅ CSS 格式驗證通過！');
+                    } else {
+                        alert('❌ CSS 格式錯誤：\n\n' + errors.join('\n'));
+                    }
+                });
+                
                 $('#apply-colors-btn').click(function() {
                     var selectedTheme = $('select[name="theme_color_class"]').val();
                     var $btn = $(this);
@@ -526,11 +658,14 @@ class ElementorThemeStyleSwitcher {
      */
     private function render_color_select() {
         $current = get_option('theme_color_class', 'expert-theme-1');
-        echo '<select name="theme_color_class">';
+        echo '<select name="theme_color_class" id="theme_color_class_select">';
         foreach ($this->color_schemes as $key => $scheme) {
             $selected = ($current === $key) ? 'selected' : '';
             echo "<option value='$key' $selected>{$scheme['name']}</option>";
         }
+        // 新增自訂配色選項
+        $selected = ($current === 'custom') ? 'selected' : '';
+        echo "<option value='custom' $selected>🎨 自訂配色（手動輸入 CSS）</option>";
         echo '</select>';
     }
 
@@ -613,22 +748,91 @@ class ElementorThemeStyleSwitcher {
      * 注入自訂樣式
      */
     public function inject_custom_styles() {
+        // 檢查是否停用樣式覆蓋
+        $is_disabled = get_option('theme_style_override_disabled', false);
+        if ($is_disabled) {
+            return; // 如果停用，直接返回不注入任何樣式
+        }
+        
         $font = esc_html(get_option('theme_font_family', 'Noto Sans TC'));
         $theme = get_option('theme_color_class', 'expert-theme-1');
         
-        if (isset($this->color_schemes[$theme])) {
-            $colors = $this->color_schemes[$theme]['colors'];
-            
-            echo "<style>
-                body { font-family: '{$font}', sans-serif; }
-                .{$theme} {
-                    --e-global-color-primary: {$colors['primary']};
-                    --e-global-color-secondary: {$colors['secondary']};
-                    --e-global-color-text: {$colors['text']};
-                    --e-global-color-accent: {$colors['accent']};
+        // 開始輸出樣式
+        echo "<style>";
+        echo "body { font-family: '{$font}', sans-serif; }";
+        
+        if ($theme === 'custom') {
+            // 處理自訂配色
+            $custom_css = get_option('theme_custom_colors_css', '');
+            if (!empty($custom_css)) {
+                $parsed_css = $this->parse_custom_css($custom_css);
+                if (!empty($parsed_css)) {
+                    echo ".custom { {$parsed_css} }";
                 }
-            </style>";
+            }
+        } elseif (isset($this->color_schemes[$theme])) {
+            // 處理預設配色方案
+            $colors = $this->color_schemes[$theme]['colors'];
+            echo ".{$theme} {
+                --e-global-color-primary: {$colors['primary']};
+                --e-global-color-secondary: {$colors['secondary']};
+                --e-global-color-text: {$colors['text']};
+                --e-global-color-accent: {$colors['accent']};
+            }";
         }
+        
+        echo "</style>";
+    }
+    
+    /**
+     * 解析自訂 CSS 變數
+     * 
+     * @param string $css_content 原始 CSS 內容
+     * @return string 解析後的 CSS 變數
+     * @since 1.3.0
+     */
+    private function parse_custom_css($css_content) {
+        if (empty($css_content)) {
+            return '';
+        }
+        
+        $parsed_lines = [];
+        $lines = explode("\n", $css_content);
+        
+        foreach ($lines as $line) {
+            $line = trim($line);
+            
+            // 跳過空行和註解
+            if (empty($line) || strpos($line, '/*') === 0) {
+                continue;
+            }
+            
+            // 驗證 CSS 變數格式
+            if (preg_match('/^(--[\w-]+):\s*([^;]+);?\s*(?:\/\*.*\*\/)?$/', $line, $matches)) {
+                $variable = trim($matches[1]);
+                $value = trim($matches[2]);
+                
+                // 安全檢查：只允許特定的 Elementor 全域色彩變數
+                $allowed_variables = [
+                    '--e-global-color-primary',
+                    '--e-global-color-secondary',
+                    '--e-global-color-text',
+                    '--e-global-color-accent',
+                    '--e-global-color-background',
+                    '--e-global-color-backgroundAccent',
+                    '--e-global-color-transparent'
+                ];
+                
+                if (in_array($variable, $allowed_variables)) {
+                    // 基本的值安全檢查
+                    if (preg_match('/^[#a-fA-F0-9\s\(\),\.%rgbhsl]+$/', $value)) {
+                        $parsed_lines[] = $variable . ': ' . esc_attr($value) . ';';
+                    }
+                }
+            }
+        }
+        
+        return implode(' ', $parsed_lines);
     }
 }
 
@@ -690,15 +894,37 @@ class WP_CLI_Theme_Colors_Command {
     public function current( $args, $assoc_args ) {
         $current_theme = get_option('theme_color_class', 'expert-theme-1');
         $current_font = get_option('theme_font_family', 'Noto Sans TC');
+        $is_disabled = get_option('theme_style_override_disabled', false);
         $schemes = $this->get_color_schemes();
         
-        if (isset($schemes[$current_theme])) {
-            WP_CLI::success("目前配色方案：");
-            WP_CLI::line("Key: {$current_theme}");
-            WP_CLI::line("Name: {$schemes[$currentTheme]['name']}");
-            WP_CLI::line("Font: {$current_font}");
+        WP_CLI::success("目前配色方案狀態：");
+        WP_CLI::line("Key: {$current_theme}");
+        WP_CLI::line("Font: {$current_font}");
+        WP_CLI::line("Style Override: " . ($is_disabled ? "❌ 已停用" : "✅ 已啟用"));
+        
+        if ($is_disabled) {
+            WP_CLI::line("");
+            WP_CLI::warning("⚠️  樣式覆蓋已停用，Elementor 全域配色將不受主題影響");
+        } elseif ($current_theme === 'custom') {
+            // 顯示自訂配色
+            WP_CLI::line("Name: 🎨 自訂配色（手動輸入 CSS）");
+            $custom_css = get_option('theme_custom_colors_css', '');
+            if (!empty($custom_css)) {
+                WP_CLI::line("Custom CSS:");
+                $lines = explode("\n", $custom_css);
+                foreach ($lines as $line) {
+                    $line = trim($line);
+                    if (!empty($line)) {
+                        WP_CLI::line("  " . $line);
+                    }
+                }
+            } else {
+                WP_CLI::warning("自訂配色內容為空");
+            }
+        } elseif (isset($schemes[$current_theme])) {
+            WP_CLI::line("Name: {$schemes[$current_theme]['name']}");
             WP_CLI::line("Colors:");
-            foreach ($schemes[$currentTheme]['colors'] as $color_name => $color_value) {
+            foreach ($schemes[$current_theme]['colors'] as $color_name => $color_value) {
                 WP_CLI::line("  {$color_name}: {$color_value}");
             }
         } else {
@@ -837,6 +1063,201 @@ class WP_CLI_Theme_Colors_Command {
     public function clear_cache( $args, $assoc_args ) {
         $this->clear_elementor_cache();
         WP_CLI::success("Elementor 快取已清除");
+    }
+    
+    /**
+     * 控制樣式覆蓋的啟用/停用狀態
+     * 
+     * ## OPTIONS
+     * 
+     * <action>
+     * : 操作類型 (enable|disable|status)
+     * 
+     * ## EXAMPLES
+     * 
+     *     # 停用樣式覆蓋
+     *     wp theme colors override disable
+     * 
+     *     # 啟用樣式覆蓋
+     *     wp theme colors override enable
+     * 
+     *     # 查看目前狀態
+     *     wp theme colors override status
+     * 
+     * @since 1.2.0
+     */
+    public function override( $args, $assoc_args ) {
+        if (empty($args[0])) {
+            WP_CLI::error("請指定操作類型：enable|disable|status");
+        }
+        
+        $action = $args[0];
+        
+        switch ($action) {
+            case 'disable':
+                update_option('theme_style_override_disabled', true);
+                WP_CLI::success("✅ 主題樣式覆蓋已停用");
+                WP_CLI::line("現在您可以在 Elementor 中自由設定全域配色，不會被主題樣式覆蓋。");
+                break;
+                
+            case 'enable':
+                update_option('theme_style_override_disabled', false);
+                WP_CLI::success("✅ 主題樣式覆蓋已啟用");
+                WP_CLI::line("主題樣式將會覆蓋 Elementor 的全域配色設定。");
+                break;
+                
+            case 'status':
+                $is_disabled = get_option('theme_style_override_disabled', false);
+                $status = $is_disabled ? "❌ 已停用" : "✅ 已啟用";
+                WP_CLI::line("樣式覆蓋狀態: {$status}");
+                
+                if ($is_disabled) {
+                    WP_CLI::line("說明: Elementor 全域配色不會被主題樣式覆蓋");
+                } else {
+                    WP_CLI::line("說明: 主題樣式會覆蓋 Elementor 全域配色");
+                }
+                break;
+                
+            default:
+                WP_CLI::error("無效的操作類型。請使用：enable|disable|status");
+                break;
+        }
+    }
+    
+    /**
+     * 管理自訂配色 CSS
+     * 
+     * ## OPTIONS
+     * 
+     * <action>
+     * : 操作類型 (get|set|clear|validate)
+     * 
+     * [<css_content>]
+     * : CSS 內容（僅在 set 操作時需要）
+     * 
+     * ## EXAMPLES
+     * 
+     *     # 取得目前的自訂配色 CSS
+     *     wp theme colors custom get
+     * 
+     *     # 設定自訂配色 CSS
+     *     wp theme colors custom set "--e-global-color-primary: #727171;"
+     * 
+     *     # 清除自訂配色 CSS
+     *     wp theme colors custom clear
+     * 
+     *     # 驗證自訂配色 CSS
+     *     wp theme colors custom validate
+     * 
+     * @since 1.3.0
+     */
+    public function custom( $args, $assoc_args ) {
+        if (empty($args[0])) {
+            WP_CLI::error("請指定操作類型：get|set|clear|validate");
+        }
+        
+        $action = $args[0];
+        
+        switch ($action) {
+            case 'get':
+                $custom_css = get_option('theme_custom_colors_css', '');
+                if (!empty($custom_css)) {
+                    WP_CLI::success("目前的自訂配色 CSS：");
+                    WP_CLI::line($custom_css);
+                } else {
+                    WP_CLI::warning("尚未設定自訂配色 CSS");
+                }
+                break;
+                
+            case 'set':
+                if (empty($args[1])) {
+                    WP_CLI::error("請提供 CSS 內容");
+                }
+                
+                $css_content = $args[1];
+                update_option('theme_custom_colors_css', $css_content);
+                update_option('theme_color_class', 'custom');
+                
+                WP_CLI::success("✅ 自訂配色 CSS 已設定");
+                WP_CLI::line("配色方案已切換至自訂模式");
+                break;
+                
+            case 'clear':
+                update_option('theme_custom_colors_css', '');
+                if (get_option('theme_color_class') === 'custom') {
+                    update_option('theme_color_class', 'expert-theme-1');
+                }
+                
+                WP_CLI::success("✅ 自訂配色 CSS 已清除");
+                WP_CLI::line("配色方案已重置為預設方案");
+                break;
+                
+            case 'validate':
+                $custom_css = get_option('theme_custom_colors_css', '');
+                if (empty($custom_css)) {
+                    WP_CLI::warning("沒有自訂配色 CSS 需要驗證");
+                    return;
+                }
+                
+                $errors = $this->validate_custom_css($custom_css);
+                if (empty($errors)) {
+                    WP_CLI::success("✅ 自訂配色 CSS 格式正確");
+                } else {
+                    WP_CLI::error("❌ 自訂配色 CSS 格式錯誤：\n" . implode("\n", $errors));
+                }
+                break;
+                
+            default:
+                WP_CLI::error("無效的操作類型。請使用：get|set|clear|validate");
+                break;
+        }
+    }
+    
+    /**
+     * 驗證自訂 CSS 內容
+     * 
+     * @param string $css_content CSS 內容
+     * @return array 錯誤列表
+     * @since 1.3.0
+     */
+    private function validate_custom_css($css_content) {
+        $errors = [];
+        $lines = explode("\n", $css_content);
+        
+        $allowed_variables = [
+            '--e-global-color-primary',
+            '--e-global-color-secondary',
+            '--e-global-color-text',
+            '--e-global-color-accent',
+            '--e-global-color-background',
+            '--e-global-color-backgroundAccent',
+            '--e-global-color-transparent'
+        ];
+        
+        foreach ($lines as $line_num => $line) {
+            $line = trim($line);
+            
+            // 跳過空行和註解
+            if (empty($line) || strpos($line, '/*') === 0) {
+                continue;
+            }
+            
+            // 檢查格式
+            if (!preg_match('/^--[\w-]+:\s*[^;]+;?\s*(?:\/\*.*\*\/)?$/', $line)) {
+                $errors[] = "第 " . ($line_num + 1) . " 行格式不正確: {$line}";
+                continue;
+            }
+            
+            // 檢查變數名稱
+            if (preg_match('/^(--[\w-]+):/', $line, $matches)) {
+                $variable = $matches[1];
+                if (!in_array($variable, $allowed_variables)) {
+                    $errors[] = "第 " . ($line_num + 1) . " 行使用了不允許的變數: {$variable}";
+                }
+            }
+        }
+        
+        return $errors;
     }
     
     /**

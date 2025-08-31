@@ -51,3 +51,6 @@ config/deploy-config-backup.json
 # Shell 設定檔 (個人化設定)
 .bashrc
 .zshrc
+
+# Node.js dependencies
+node_modules/

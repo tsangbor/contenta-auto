@@ -245,123 +245,145 @@ D. **受眾核心痛點 (Audience Core Pain Points)**:
 
 **第三步：生成輸出與提供論證 (Generate Output & Provide Justification)**
 
-生成最終的 `page_list` 物件，物件的「鍵」是頁面的英文 slug，「值」是根據頁面功能和品牌調性決定的最適切的繁體中文名稱（例如，將 contact 命名為「預約一場對話」可能比「聯絡我」更貼切）。
+生成最終的 `page_list` 物件，物件的「鍵」是頁面的英文 slug，「值」是根據頁面功能和品牌調性決定的最適切的繁體中文名稱。
+
+**🚨 頁面命名創意要求（最高優先級）**：
+
+❌ **嚴禁使用的通用名稱**：
+- 「關於我」、「服務項目」、「聯絡我」、「部落格」
+- 「關於我們」、「專業服務」、「聯繫我們」、「文章」
+- 「我的故事」（太常見）、「專屬服務」（太通用）
+
+✅ **強制要求**：
+1. **home 頁面**：固定使用「首頁」
+2. **其他頁面**：必須根據品牌特色創造獨特名稱
+3. **差異化原則**：每個網站的頁面名稱都應該獨一無二，反映該品牌的獨特性
+
+📝 **命名策略指南**：
+1. **分析品牌核心**：
+   - 從 **{brand_personality}** 提取情感關鍵字
+   - 從 **{unique_value}** 找出差異化特點
+   - 從 **{target_audience}** 理解用戶語言習慣
+
+2. **創意發想方向**：
+   - **about 頁面**：用動詞短語（如「一起認識」）、獨特視角（如「幕後故事」）、品牌理念（如「初心所在」）
+   - **service 頁面**：行動導向（如「開始蛻變」）、價值承諾（如「共創價值」）、解決方案（如「專屬方案」）
+   - **blog 頁面**：內容特色（如「觀點匯流」）、知識定位（如「深度洞察」）、互動概念（如「思維碰撞」）
+   - **contact 頁面**：邀請行動（如「開啟對話」）、連結概念（如「攜手同行」）、溫度表達（如「期待相遇」）
+
+3. **品牌調性對應範例**（請變化創新，不要照抄）：
+   - **溫暖陪伴型**：「一起走過」「溫柔相遇」「陪伴旅程」「心的連結」
+   - **專業諮詢型**：「策略對話」「專業洞察」「價值共創」「攜手突破」
+   - **創意活潑型**：「靈感爆發」「創意工坊」「玩轉創意」「火花碰撞」
+   - **健康療癒型**：「身心平衡」「療癒空間」「健康啟程」「活力泉源」
+   - **知識教育型**：「知識寶庫」「學習旅程」「智慧分享」「成長階梯」
+
+⚠️ **檢查標準**：生成的頁面名稱必須讓人一看就知道與眾不同，具有記憶點
 
 在 `page_list` 之後，你必須額外附帶一個 `sitemap_reasoning` 欄位。在這個欄位中，你必須提供一份基於證據的完整論證，解釋你為何規劃出這樣的頁面組合。你的理由需要簡潔地引用你在第一步中從文件中得到的洞察。
 
-**預期輸出範例**：
+**預期輸出範例**（每個品牌都應該有獨特的命名）：
+
+範例1 - 健康教練品牌：
 ```json
 "page_list": {
   "home": "首頁",
-  "about": "關於我",
-  "services": "服務方案",
-  "blog": "靈光乍現",
-  "resources": "自我探索工具箱",
-  "contact": "預約一場對話"
-},
-"sitemap_reasoning": "基於訪談紀錄中客戶多次強調其『非評判性的陪伴空間』與獨特的『整理對話』流程（隱含需求），我將『服務方案』頁面設為核心，用以詳細闡述其價值。同時，為了直接回應目標受眾『渴望溫柔陪伴、釐清方向』的需求（受眾痛點），我特別規劃了『自我探索工具箱』頁面，作為吸引與建立初步信任的接觸點。最後，將聯絡頁面命名為『預約一場對話』，更符合品牌溫暖、同理的調性，並直接對應其『一對一教練諮詢』的核心商業目標。"
+  "about": "身心旅程",
+  "service": "蛻變計畫",
+  "blog": "健康筆記",
+  "contact": "開始改變"
+}
 ```
 
-### 2. layout_selection 智能組裝規則
+範例2 - 專業顧問品牌：
+```json
+"page_list": {
+  "home": "首頁",
+  "about": "經驗洞察",
+  "service": "策略藍圖",
+  "blog": "觀點前瞻",
+  "contact": "攜手突破"
+}
+```
 
-你的核心任務是為 page_list 中的每一個頁面，扮演一位專業的網站設計師，從下方【可用容器資產庫】中，選擇最合適的容器來依序組建頁面佈局。
+範例3 - 創意教育品牌：
+```json
+"page_list": {
+  "home": "首頁",
+  "about": "教育理念",
+  "service": "學習旅程",
+  "blog": "創意實驗室",
+  "contact": "一起探索"
+}
+```
 
-⚠️ **重要限制**：
-- layout_selection 中**嚴禁使用** header 和 footer 容器！
-- home 頁面的 hero 容器：必須使用 "homehero" 開頭的容器（如 homehero001, homehero002 等）
-- 其他頁面的 hero 容器：使用 "hero" 開頭的容器（如 hero001, hero002 等）
-- **絕對禁止**使用任何未在【嚴格限定的容器列表】中出現的容器名稱
-- **絕對禁止**自行創造、編號或推測容器名稱 (例如 `contact002` 是【錯誤的】，因為列表中只有 `contact001`)
+"sitemap_reasoning": "基於訪談紀錄中客戶多次強調其『非評判性的陪伴空間』與獨特的『整理對話』流程（隱含需求），我將服務頁面命名為『蛻變計畫』，直接呼應目標受眾渴望改變的心理需求。『身心旅程』的命名反映了品牌注重全人發展的理念，而『開始改變』則以行動導向的語言，降低諮詢門檻並鼓勵用戶踏出第一步。"
+```
 
-#### 2.1 可用容器資產庫 (Available Container Asset Library)
-你只能從以下列表中選擇容器。每個容器的詳細描述、風格和適用場景，請基於品牌調性和頁面目標來選擇：
-' . $container_options . '
+### 2. layout_selection 固定配置
 
-#### 2.2 頁面組裝邏輯與規則 (Page Assembly Logic and Rules)
-你必須嚴格遵守以下規則來為每個頁面進行佈局。我們為首頁 (home) 和其他內頁設定不同的組裝策略。
+⚠️ **重要變更**：layout_selection 現在使用**固定配置**，不再進行動態組合或智能選擇。
 
-**A. 首頁 (Home Page) 組裝藍圖**
-對於 home 頁面，你不能只選擇一個 Hero 區塊就結束。你必須扮演首席設計師，為訪客打造一趟完整的品牌初體驗旅程。請至少遵循以下結構，依序組合 3-4 個區塊來構成首頁：
+所有網站都必須使用以下標準化的 layout_selection 配置：
 
-**第一部分：建立第一印象 (Hero Section)**
-- **必須 (Must-have)**: 頁面的第一個區塊，必須從 homehero... 容器中選擇一個。你的選擇 (homehero001 vs homehero002) 必須基於品牌調性。
-- **決策指引**: 對於溫暖、療癒、親和的品牌，homehero002 的沉浸式風格可能比 homehero001 的商業感風格更貼切。
-
-**第二部分：建立信任與連結 (About Section)**  
-- **強烈建議 (Strongly Recommended)**: 在 Hero 之後，緊接著加入一個 about... 容器。這能幫助訪客在第一時間快速了解「你是誰」，建立信任感。請根據品牌是強調「個人故事」還是「團隊實力」，從 about001 和 about002 中做出最佳選擇。
-
-**第三部分：展示核心價值 (Value Proposition Section)**
-- **擇一或全選 (Choose One or Both)**: 接著，你必須向訪客展示品牌的核心價值。你有以下選擇：
-  * **選項 A (服務導向)**: 如果品牌的核心目標是推廣服務 (例如 service_categories 很明確)，請加入一個 service... 區塊，用來摘要介紹核心服務。你應根據服務的複雜度，從 service001, service002, service003 中選擇最合適的一款。
-  * **選項 B (內容導向)**: 如果品牌以內容創作為主（例如部落客、作家），請加入 archive001 區塊，展示最新的文章，體現其專業思想與持續產出的價值。
-- **決策指引**: 你可以同時選擇兩者（例如先 service 後 archive），但需考慮頁面不宜過長。請根據你對用戶資料的分析，判斷「服務」和「內容」哪個對於吸引新訪客更具優先級。
-
-**第四部分：引導下一步行動 (Call to Action)**
-- **建議加入 (Recommended)**: 在頁面中後段，強烈建議加入一個 cta... 或 faq... 區塊，來引導訪客深入探索、解答疑慮或直接預約諮詢。
-
-**B. 其他內頁 (Inner Pages) 組裝規則**
-以下規則適用於除了 home 以外的所有頁面（如 about, service, contact 等）：
-
-**Hero 區塊規則**: 每個內頁的第一個區塊都必須是一個 Hero 容器。你必須從 hero001, hero002, hero003 中，根據該頁面的目標選擇最合適的一款。
-
-**核心內容區塊規則**: 每個頁面都應包含一個與其功能相符的核心區塊（例如 about 頁面必須有 about... 容器）。
-
-**彈性輔助區塊規則**: 在滿足核心需求後，你可以自由判斷是否需要加入 cta..., faq..., contact... 等輔助區塊。
-
-#### 2.3 輸出格式與要求 (Output Format and Requirements)
-最終的 layout_selection 必須是一個 JSON 陣列。每個物件代表一個頁面，container 欄位使用 key-value 格式，key 是區塊類型，value 是選擇的容器編號。
-
-**範例輸出格式**：
 ```json
 "layout_selection": [
     {
         "page": "home",
         "container": {
-            "hero": "homehero002",
-            "about": "about001",
-            "service": "service002",
-            "archive": "archive001",
-            "cta": "cta001"
+            "hero": "homehero-20250726-001",
+            "service": "service-20250726-001",
+            "about": "about-20250726-001",
+            "services": "service-20250726-002",
+            "showcases": "showcases-20250726-001",
+            "testimonials": "testimonials-20250726-001",
+            "clients": "clients-20250726-001",
+            "archive": "archive-20250726-001"
         }
     },
     {
         "page": "about",
         "container": {
-            "hero": "hero002",
-            "about": "about001",
-            "cta": "cta001"
+            "hero": "hero-20250726-001",
+            "about": "about-20250726-002",
+            "vision": "vision-20250726-001",
+            "statistic": "statistic-20250726-001"
         }
     },
     {
         "page": "service",
         "container": {
-            "hero": "hero001",
-            "service": "service002",
-            "faq": "faq001",
-            "contact": "contact001"
+            "hero": "hero-20250726-001",
+            "service": "service-20250726-003",
+            "feedback": "feedback-20250726-001",
+            "faq": "faq-20250726-001"
         }
     },
     {
         "page": "blog",
         "container": {
-            "hero": "hero003",
-            "archive": "archive001"
+            "hero": "hero-20250726-001",
+            "archive": "archives-20250726-001"
         }
     },
     {
         "page": "contact",
         "container": {
-            "hero": "hero001",
-            "contact": "contact001"
+            "hero": "hero-20250726-001",
+            "contact": "contact-20250726-001",
+            "faq": "faq-20250726-002"
         }
     }
 ]
 ```
 
-**⚠️ 最終驗證**：
-- 輸出前，再次確認所有容器值都嚴格存在於【可用容器資產庫】列表中。
-- 基於前述的設計邏輯規則，為每個頁面選擇最合適的容器組合。
-- 輸出後附帶確認訊息：「已驗證，所有容器均符合規則。」
+**✅ 新的處理規則**：
+- **必須完全複製**上述固定的 layout_selection 配置，一個字都不能改
+- **絕對不可**根據品牌調性或用戶需求調整容器選擇
+- **絕對不可**從容器資產庫中動態選擇其他容器
+- **絕對不可**修改容器編號或名稱
+- **絕對不可**增加或減少任何容器項目
+- **絕對不可**改變容器的順序或結構
 
 ### 3. 服務項目限制
 - 數量：固定3個
@@ -396,21 +418,54 @@ D. **受眾核心痛點 (Audience Core Pain Points)**:
   - 內容大綱必須展現 **{unique_value}** 的特色
 - **個性化程度**：避免通用化內容，每篇文章都應該具有明確的品牌識別度
 
-## 配色方案定義
+### 9. content_options 完整首頁內容生成要求
 
-專家導向主題（適用於：顧問、教練、專業服務、B2B）：
-- expert-theme-1: 鈦金藍×銀灰（科技感）
-- expert-theme-2: 黑金銅×暖感奢華（精品顧問）
-- expert-theme-3: 濃墨綠×銀湖藍（理性專業）
-- expert-theme-4: 橘磚紅×霧灰（品牌經營）
-- expert-theme-5: 靛紫黑×鉻銀（策略金融）
+**🎯 content_options 詳細要求**：
 
-生活導向主題（適用於：生活類、教學、創作、B2C）：
-- lifestyle-theme-1: 春日橄欖×深綠對比
-- lifestyle-theme-2: 柔粉米×木紅對比
-- lifestyle-theme-3: 海岸藍綠×深藍對比
-- lifestyle-theme-4: 黃昏杏橘×焦糖棕對比
-- lifestyle-theme-5: 湖水粉藍×暗靛跳色
+必須為首頁生成完整且具體的文案內容，包括：
+
+**Hero 區塊（首頁橫幅）**：
+- index_hero_title: 基於{brand_personality}和{unique_value}，生成15-25字的吸引人主標題
+- index_hero_subtitle: 30-50字的詳細描述，說明品牌核心價值和對{target_audience}的幫助
+- index_hero_cta_text: 3-8字的行動按鈕文字，符合品牌調性
+- index_hero_cta_link: 合適的內部連結（如 /about 或 /service）
+
+**About 區塊（關於我們）**：
+- index_about_title: 8-15字的關於區塊標題，展現品牌特色
+- index_about_subtitle: 20-35字的關於區塊副標題
+- index_about_content: 80-120字的詳細介紹，包含品牌故事和核心理念
+- index_about_cta_text: 3-8字的行動按鈕文字
+- index_about_cta_link: 相關內部連結
+
+**Service 區塊（服務項目）**：
+- index_service_title: 8-15字的服務區塊標題
+- index_service_subtitle: 20-35字的服務區塊副標題
+- index_service_list: 完整的3個服務項目陣列，每個包含：
+  - icon: Font Awesome 圖標（如 "fas fa-lightbulb"）
+  - title: 8-15字的服務標題
+  - description: 30-50字的服務描述
+- index_service_cta_text: 3-8字的行動按鈕文字
+- index_service_cta_link: 服務頁面連結
+
+**Archive 區塊（文章精選）**：
+- index_archive_title: 8-15字的文章區塊標題
+- index_archive_subtitle: 20-35字的文章區塊副標題
+
+**Footer CTA 區塊**：
+- index_footer_cta_title: 8-15字的頁尾行動呼籲標題
+- index_footer_cta_subtitle: 20-35字的頁尾行動呼籲副標題
+- index_footer_cta_button: 3-8字的頁尾按鈕文字
+
+**❌ 嚴禁行為**：
+- ❌ 絕對不可在任何 content_options 欄位中使用 "N/A"、"待填入"、"請填寫" 等佔位符
+- ❌ 絕對不可留空任何首頁相關的 content_options 欄位
+- ❌ 絕對不可使用通用化的內容，必須基於品牌特色生成
+
+**✅ 品質要求**：
+- 所有文案必須針對 **{target_audience}** 撰寫
+- 所有文案必須反映 **{brand_personality}** 調性
+- 所有文案必須包含 **{unique_value}** 的核心價值
+- 所有服務項目必須基於 **{service_categories}** 生成
 
 ## 重要指示：資料來源優先級
 
@@ -438,6 +493,12 @@ D. **受眾核心痛點 (Audience Core Pain Points)**:
 - ❌ 絕對不可使用虛假的聯絡資訊（如 hello@example.com, your-page 等）
 - ❌ 絕對不可忽略用戶已提供的 layout_selection 配置
 - ❌ 絕對不可忽略用戶已提供的 color_scheme 配色方案
+- ❌ 絕對不可在 page_list 中使用通用頁面名稱（如「關於我」、「服務項目」、「聯絡我」、「部落格」）
+- ❌ 絕對不可使用過於相似的頁面名稱（如「我的故事」、「專業服務」、「安排對話」這些都太常見）
+- ❌ 絕對不可在頁面名稱中包含特定品牌名稱或人名
+- ❌ 絕對不可生成讓不同品牌網站看起來一樣的頁面名稱
+- ❌ 絕對不可修改、簡化或重新排列 layout_selection 固定配置
+- ❌ 絕對不可從 layout_selection 中刪除任何容器項目
 
 ## 輸出要求
 
@@ -463,37 +524,70 @@ site-config.json 必須包含以下所有區塊，不可遺漏：
 - 網域必須使用：**{domain}** 而非 example.com
 - 社群媒體連結：如果用戶未提供，請使用 "#" 或留空，不可使用虛假網址
 
-**⚠️ 特別注意：檢查用戶資料**
-在生成 layout_selection 和 color_scheme 前，請先檢查用戶的 JSON 資料中是否已經提供：
-- 如果用戶已提供 layout_selection，必須完全使用用戶的配置
+**🚨 重要警告：layout_selection 必須完全複製固定配置**
+layout_selection 必須**逐字複製**以下固定配置，**絕對不可修改任何內容**：
+
+```json
+"layout_selection": [
+    {
+        "page": "home",
+        "container": {
+            "hero": "homehero-20250726-001",
+            "service": "service-20250726-001",
+            "about": "about-20250726-001",
+            "services": "service-20250726-002",
+            "showcases": "showcases-20250726-001",
+            "testimonials": "testimonials-20250726-001",
+            "clients": "clients-20250726-001",
+            "archive": "archive-20250726-001"
+        }
+    },
+    {
+        "page": "about",
+        "container": {
+            "hero": "hero-20250726-001",
+            "about": "about-20250726-002",
+            "vision": "vision-20250726-001",
+            "statistic": "statistic-20250726-001"
+        }
+    },
+    {
+        "page": "service",
+        "container": {
+            "hero": "hero-20250726-001",
+            "service": "service-20250726-003",
+            "feedback": "feedback-20250726-001",
+            "faq": "faq-20250726-001"
+        }
+    },
+    {
+        "page": "blog",
+        "container": {
+            "hero": "hero-20250726-001",
+            "archive": "archives-20250726-001"
+        }
+    },
+    {
+        "page": "contact",
+        "container": {
+            "hero": "hero-20250726-001",
+            "contact": "contact-20250726-001",
+            "faq": "faq-20250726-002"
+        }
+    }
+]
+```
+
+**✅ 必須遵守的規則**：
+- **必須逐字複製**上述固定的 layout_selection 配置，包含所有容器項目
+- **絕對不可**動態組合或從容器資產庫中隨機選擇
+- **絕對不可**刪除、增加或修改任何容器項目
+- **絕對不可**簡化配置或省略任何部分
 - 如果用戶已提供 color_scheme，必須完全使用用戶的配色方案
-- 如果用戶未提供，才根據品牌調性自行設計
-- 在自行設計 layout_selection 時，請從每種容器類型的可用編號中隨機選擇，創造多樣化的頁面配置
 
 請直接輸出兩個完整的JSON檔案內容，注意 layout_selection 的格式要求。
 
-**⚠️ layout_selection 必須使用以下扁平結構格式**：
-```json
-"layout_selection": [
-  {
-    "page": "home",
-    "container": {
-      "hero": "homehero001",
-      "about": "about001", 
-      "service": "service001",
-      "archive": "archive001"
-    }
-  },
-  {
-    "page": "about", 
-    "container": {
-      "hero": "hero001",
-      "about": "about001",
-      "contact": "contact001"
-    }
-  }
-]
-```
+**⚠️ 範例格式僅供參考，請使用上述固定配置**：
 
 **❌ 絕對禁止使用錯誤的巢狀格式**：
 ```json

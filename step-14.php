@@ -256,10 +256,21 @@ class PageGenerator {
             return false;
         }
         
-        // 取得頁面 ID
-        $page_id = trim($create_result['output']);
-        if (!is_numeric($page_id)) {
-            $this->deployer->log("錯誤: 無法取得頁面 ID: " . $create_result['output']);
+        // 取得頁面 ID，從輸出中提取純數字
+        $output_lines = explode("\n", $create_result['output']);
+        $page_id = null;
+        
+        // 尋找純數字的行作為頁面ID
+        foreach ($output_lines as $line) {
+            $line = trim($line);
+            if (is_numeric($line) && $line > 0) {
+                $page_id = $line;
+                break;
+            }
+        }
+        
+        if ($page_id === null) {
+            $this->deployer->log("錯誤: 無法從輸出中找到頁面 ID: " . $create_result['output']);
             return false;
         }
         

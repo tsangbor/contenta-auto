@@ -54,7 +54,7 @@ class AuthManager {
             $hoursSince = ($now->getTimestamp() - $lastUpdateTime->getTimestamp()) / 3600;
             
             // 如果超過 0.5 小時（30分鐘）就需要更新
-            if ($hoursSince > 0.5) {
+            if ($hoursSince > 3) {
                 $this->log(sprintf('認證已過期 %.1f 小時，需要更新', $hoursSince), 'INFO');
                 return true;
             }

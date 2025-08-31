@@ -311,51 +311,81 @@ class GlobalTemplateImporter {
      * 查詢最新匯入的模板文章 ID
      */
     private function findLatestImportedTemplate($server_host, $ssh_user, $ssh_port, $ssh_key_path, $document_root, $template_name) {
-        // 使用 WP-CLI 查詢最新的 elementor_library 文章，按標題匹配
+        $this->deployer->log("嘗試查詢匹配的模板: {$template_name}");
+        
+        // 首先嘗試直接獲取最新的模板ID，然後檢查標題
+        $ids_cmd = "cd {$document_root} && wp post list --post_type=elementor_library --post_status=publish --orderby=date --order=DESC --number=5 --format=ids --allow-root";
+        $ids_result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path, $ids_cmd);
+        
+        if ($ids_result['return_code'] === 0) {
+            $ids = trim($ids_result['output']);
+            // 清理 WP-CLI 系統訊息
+            $ids = $this->cleanWPCLIOutput($ids);
+            
+            if (!empty($ids)) {
+                $id_list = array_filter(explode(' ', $ids), function($id) {
+                    return is_numeric(trim($id)) && trim($id) > 0;
+                });
+                
+                if (!empty($id_list)) {
+                    $this->deployer->log("找到最近的模板IDs: " . implode(', ', $id_list));
+                    
+                    // 檢查每個ID的標題
+                    foreach ($id_list as $post_id) {
+                        $post_id = trim($post_id);
+                        if (is_numeric($post_id) && $post_id > 0) {
+                            $title_cmd = "cd {$document_root} && wp post get {$post_id} --field=post_title --allow-root";
+                            $title_result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path, $title_cmd);
+                            
+                            if ($title_result['return_code'] === 0) {
+                                $post_title = trim($this->cleanWPCLIOutput($title_result['output']));
+                                $this->deployer->log("檢查模板 ID {$post_id}: '{$post_title}'");
+                                
+                                if ($this->isTemplateNameMatch($template_name, $post_title)) {
+                                    $this->deployer->log("找到匹配的模板: {$post_title} (ID: {$post_id})");
+                                    return $post_id;
+                                }
+                            }
+                        }
+                    }
+                    
+                    // 如果沒有找到匹配的，返回最新的ID
+                    $latest_id = trim($id_list[0]);
+                    if (is_numeric($latest_id) && $latest_id > 0) {
+                        $this->deployer->log("使用最新的模板 ID: {$latest_id}");
+                        return $latest_id;
+                    }
+                }
+            }
+        }
+        
+        // 備用方案：使用 CSV 查詢（保留原有邏輯作為備用）
         $query_cmd = "cd {$document_root} && wp post list --post_type=elementor_library --post_status=publish --orderby=date --order=DESC --format=csv --fields=ID,post_title --allow-root";
         
         $query_result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path, $query_cmd);
         
         if ($query_result['return_code'] === 0) {
             $lines = explode("\n", trim($query_result['output']));
+            // 移除空行
+            $lines = array_filter($lines, function($line) {
+                return !empty(trim($line));
+            });
             
             // 跳過 CSV 標題行
             if (count($lines) > 1) {
                 for ($i = 1; $i < count($lines); $i++) {
                     $fields = str_getcsv($lines[$i], ',', '"', '\\');
                     if (count($fields) >= 2) {
-                        $post_id = $fields[0];
-                        $post_title = $fields[1];
+                        $post_id = trim($fields[0]);
+                        $post_title = trim($fields[1]);
                         
-                        // 檢查標題是否匹配模板名稱（多種匹配策略）
-                        $matches = false;
-                        
-                        // 策略1: 精確匹配
-                        if (strtolower($post_title) === strtolower($template_name)) {
-                            $matches = true;
+                        // 驗證ID是否為有效數字
+                        if (!is_numeric($post_id) || $post_id <= 0) {
+                            continue; // 跳過無效的ID
                         }
                         
-                        // 策略2: 包含匹配（原模板名包含文章標題）
-                        if (!$matches && stripos($template_name, $post_title) !== false) {
-                            $matches = true;
-                        }
-                        
-                        // 策略3: 包含匹配（文章標題包含模板名）
-                        if (!$matches && stripos($post_title, $template_name) !== false) {
-                            $matches = true;
-                        }
-                        
-                        // 策略4: 去除數字和特殊字符的匹配（如 404error001 vs 404）
-                        if (!$matches) {
-                            $clean_template_name = preg_replace('/[^a-zA-Z]/', '', $template_name);
-                            $clean_post_title = preg_replace('/[^a-zA-Z]/', '', $post_title);
-                            if (!empty($clean_template_name) && !empty($clean_post_title) && 
-                                stripos($clean_template_name, $clean_post_title) !== false) {
-                                $matches = true;
-                            }
-                        }
-                        
-                        if ($matches) {
+                        // 使用統一的匹配方法
+                        if ($this->isTemplateNameMatch($template_name, $post_title)) {
                             $this->deployer->log("找到匹配的模板: {$post_title} (ID: {$post_id}) [匹配模板: {$template_name}]");
                             return $post_id;
                         }
@@ -364,22 +394,98 @@ class GlobalTemplateImporter {
             }
         }
         
-        // 如果按標題匹配失敗，返回最新的 elementor_library 文章 ID
-        $latest_cmd = "cd {$document_root} && wp post list --post_type=elementor_library --post_status=publish --orderby=date --order=DESC --number=1 --format=csv --fields=ID --allow-root";
+        // 如果按標題匹配失敗，直接使用 --format=ids 獲取最新的模板ID
+        $this->deployer->log("按標題匹配失敗，嘗試獲取最新的 Elementor 模板...");
         
-        $latest_result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path, $latest_cmd);
+        $ids_cmd = "cd {$document_root} && wp post list --post_type=elementor_library --post_status=publish --orderby=date --order=DESC --number=1 --format=ids --allow-root";
+        $ids_result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path, $ids_cmd);
         
-        if ($latest_result['return_code'] === 0) {
-            $lines = explode("\n", trim($latest_result['output']));
-            if (count($lines) > 1) {
-                $post_id = trim($lines[1]); // 跳過 CSV 標題
-                $this->deployer->log("使用最新的 Elementor 模板 ID: {$post_id}");
-                return $post_id;
+        if ($ids_result['return_code'] === 0) {
+            $id = trim($ids_result['output']);
+            if (is_numeric($id) && $id > 0) {
+                $this->deployer->log("使用 --format=ids 獲取的最新模板 ID: {$id}");
+                return $id;
+            } else {
+                $this->deployer->log("警告: --format=ids 回傳的ID無效: '{$id}'");
+            }
+        } else {
+            $this->deployer->log("錯誤: --format=ids 命令執行失敗: " . $ids_result['output']);
+        }
+        
+        // 如果 --format=ids 也失敗，嘗試用 CSV 格式
+        $csv_cmd = "cd {$document_root} && wp post list --post_type=elementor_library --post_status=publish --orderby=date --order=DESC --number=1 --format=csv --fields=ID --allow-root";
+        $csv_result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path, $csv_cmd);
+        
+        if ($csv_result['return_code'] === 0) {
+            $clean_output = $this->cleanWPCLIOutput($csv_result['output']);
+            $lines = explode("\n", trim($clean_output));
+            // 移除空行和標題行
+            $lines = array_filter($lines, function($line) {
+                $line = trim($line);
+                return !empty($line) && $line !== 'ID' && is_numeric($line);
+            });
+            
+            // 取第一個有效的數字ID
+            foreach ($lines as $line) {
+                $line = trim($line);
+                if (is_numeric($line) && $line > 0) {
+                    $this->deployer->log("從 CSV 中找到有效的模板 ID: {$line}");
+                    return $line;
+                }
             }
         }
         
         $this->deployer->log("無法找到匹配的模板文章 ID");
         return null;
+    }
+    
+    /**
+     * 清理 WP-CLI 輸出中的系統訊息
+     */
+    private function cleanWPCLIOutput($output) {
+        // 移除常見的 WP-CLI 系統訊息
+        $patterns = [
+            '/WP-CLI user-role 指令已註冊\s*/',
+            '/WP-CLI.*指令已註冊\s*/',
+            '/^Warning:.*$/m',
+            '/^Notice:.*$/m'
+        ];
+        
+        foreach ($patterns as $pattern) {
+            $output = preg_replace($pattern, '', $output);
+        }
+        
+        return trim($output);
+    }
+    
+    /**
+     * 檢查模板名稱是否匹配
+     */
+    private function isTemplateNameMatch($template_name, $post_title) {
+        // 策略1: 精確匹配
+        if (strtolower($post_title) === strtolower($template_name)) {
+            return true;
+        }
+        
+        // 策略2: 包含匹配（原模板名包含文章標題）
+        if (stripos($template_name, $post_title) !== false) {
+            return true;
+        }
+        
+        // 策略3: 包含匹配（文章標題包含模板名）
+        if (stripos($post_title, $template_name) !== false) {
+            return true;
+        }
+        
+        // 策略4: 去除數字和特殊字符的匹配（如 404error001 vs 404）
+        $clean_template_name = preg_replace('/[^a-zA-Z]/', '', $template_name);
+        $clean_post_title = preg_replace('/[^a-zA-Z]/', '', $post_title);
+        if (!empty($clean_template_name) && !empty($clean_post_title) && 
+            stripos($clean_template_name, $clean_post_title) !== false) {
+            return true;
+        }
+        
+        return false;
     }
     
     private function setAsDefaultTemplate($server_host, $ssh_user, $ssh_port, $ssh_key_path, $document_root, $post_id, $template_type) {

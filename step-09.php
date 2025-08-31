@@ -117,9 +117,14 @@ function extractPlaceholders($data, $page_name) {
                     // 查找 {{}} 格式的佔位符
                     if (preg_match_all('/\{\{([^}]+)\}\}/', $value, $matches)) {
                         foreach ($matches[1] as $placeholder) {
-                            // 排除背景和圖片相關的佔位符
-                            if (!preg_match('/_(BG|PHOTO)$/', $placeholder)) {
-                                $placeholders[$placeholder] = '{ai生成}';
+                            // 排除背景和圖片相關的佔位符（包含_BG、_PHOTO、_IMAGE、_IMG、_LOGO、_ICON結尾，但包含FAICON因為它是文字）
+                            if (!preg_match('/_(BG|PHOTO|IMAGE|IMG|LOGO|ICON)\d*$/', $placeholder) || preg_match('/FAICON\d*$/', $placeholder)) {
+                                // 檢查是否為 FAICON 類型的佔位符
+                                if (preg_match('/FAICON\d*$/', $placeholder)) {
+                                    $placeholders[$placeholder] = '{ai生成_faicon}';
+                                } else {
+                                    $placeholders[$placeholder] = '{ai生成}';
+                                }
                             }
                         }
                     }
@@ -253,19 +258,25 @@ function buildAIPrompt($text_mapping, $site_config) {
     $prompt .= "\n";
     
     $prompt .= "## 需要填充的文案對應表\n";
-    $prompt .= "請將以下 JSON 中所有 \"{ai生成}\" 替換為具體的文案內容：\n\n";
+    $prompt .= "請將以下 JSON 中所有 \"{ai生成}\" 和 \"{ai生成_faicon}\" 替換為具體內容：\n\n";
     $prompt .= json_encode($text_mapping, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT) . "\n\n";
     
     $prompt .= "## 填充要求\n";
     $prompt .= "1. 保持 JSON 格式完整\n";
     $prompt .= "2. 文案要符合品牌調性和目標受眾\n";
-    $prompt .= "3. TITLE 類型控制在 10-30 字\n";
-    $prompt .= "4. SUBTITLE 類型控制在 20-50 字\n";
-    $prompt .= "5. CONTENT 或 DESCR 類型控制在 150-600 字（至少是 SUBTITLE 的 3 倍長度），內容要深入豐富\n";
-    $prompt .= "6. BUTTON 類型控制在 2-8 字\n";
-    $prompt .= "7. LINK 類型只能使用上述可用連結清單中的連結\n";
-    $prompt .= "8. CONTENT 和 DESCR 類型需要包含具體細節、實例或深度說明，不可過於簡短\n";
-    $prompt .= "9. 回應只包含填充完成的 JSON，不要額外說明\n";
+    $prompt .= "3. TITLE 類型控制在 8-15 繁體中文字\n";
+    $prompt .= "4. SUBTITLE 類型控制在 20-35 繁體中文字\n";
+    $prompt .= "5. SHORT 類型控制在 30-50 字，用於簡短描述或標籤\n";
+    $prompt .= "6. CONTENT 或 DESCR 類型控制在 50-70 繁體中文字（至少是 SUBTITLE 的 3 倍長度），內容要深入豐富\n";
+    $prompt .= "7. BUTTON 類型控制在 2-6 繁體中文字\n";
+    $prompt .= "8. LINK 類型只能使用上述可用連結清單中的連結\n";
+    $prompt .= "9. CONTENT 和 DESCR 類型需要包含具體細節、實例或深度說明\n";
+    $prompt .= "10. SHORT 類型適用於如 CONTACT_SHORT_TEXT 等簡短文字，需要精簡有力\n";
+    $prompt .= "11. **FAICON 類型處理**：對於 \"{ai生成_faicon}\" 的佔位符，請替換為適當的 Font Awesome 圖標 CSS 類別\n";
+    $prompt .= "    - 格式：「fas fa-[icon-name]」或「far fa-[icon-name]」\n";
+    $prompt .= "    - 根據對應的標題內容選擇最適合的圖標\n";
+    $prompt .= "    - 常用圖標參考：fas fa-cubes（立方體）、fas fa-chess-knight（策略）、fas fa-rocket（成長）、fas fa-lightbulb（創意）、fas fa-cogs（技術）、fas fa-handshake（合作）、fas fa-chart-line（分析）、fas fa-shield-alt（安全）、fas fa-users（團隊）、fas fa-star（品質）\n";
+    $prompt .= "12. 回應只包含填充完成的 JSON，不要額外說明\n";
     
     return $prompt;
 }
@@ -341,7 +352,7 @@ function callOpenAI($prompt, $openai_config, $deployer) {
  */
 function callGemini($prompt, $gemini_config, $all_api_credentials, $deployer) {
     $api_key = $gemini_config['api_key'] ?? '';
-    $model = $gemini_config['model'] ?? 'gemini-2.0-flash-exp';
+    $model = $gemini_config['model'] ?? 'gemini-2.5-flash-lite';
     $base_url = $gemini_config['base_url'] ?? 'https://generativelanguage.googleapis.com/v1beta/models/';
     
     if (empty($api_key)) {
@@ -456,7 +467,15 @@ function parseAIResponse($response, $deployer) {
     $parsed = json_decode($json_content, true);
     
     if (json_last_error() !== JSON_ERROR_NONE) {
+        $deployer->log("JSON 解析失敗，錯誤: " . json_last_error_msg());
+        $deployer->log("嘗試解析的 JSON 內容（前500字元）: " . mb_substr($json_content, 0, 500));
         throw new Exception("無法解析 AI 回應的 JSON: " . json_last_error_msg());
+    }
+    
+    // 檢查回應結構是否正確
+    if (!is_array($parsed)) {
+        $deployer->log("警告: AI 回應不是陣列格式，類型為: " . gettype($parsed));
+        $deployer->log("回應內容: " . substr(print_r($parsed, true), 0, 500));
     }
     
     return $parsed;
@@ -467,6 +486,12 @@ function parseAIResponse($response, $deployer) {
  */
 function applyTextMapping($page_data, $page_mapping) {
     $replaceInContent = function($data, $mapping) use (&$replaceInContent) {
+        // 檢查 mapping 是否為有效陣列
+        if (!is_array($mapping)) {
+            error_log("Warning: mapping 不是陣列，類型為: " . gettype($mapping));
+            return $data; // 如果 mapping 不是陣列，直接返回原始資料
+        }
+        
         if (is_array($data)) {
             foreach ($data as $key => $value) {
                 if (is_string($value)) {
@@ -581,12 +606,17 @@ try {
         // 步驟 4: 應用文案到各頁面和全域模板（包含沒有佔位符的）
         foreach ($processed_pages as $page_name => $page_data) {
             // 如果有佔位符要替換，就進行替換；否則直接使用原始資料
-            if (isset($filled_mapping[$page_name])) {
+            if (isset($filled_mapping[$page_name]) && is_array($filled_mapping[$page_name])) {
                 $updated_page_data = applyTextMapping($page_data, $filled_mapping[$page_name]);
                 $replacement_count = count($filled_mapping[$page_name]);
             } else {
                 $updated_page_data = $page_data;  // 沒有佔位符，直接使用原始資料
                 $replacement_count = 0;
+                
+                // 如果 filled_mapping 存在但不是陣列，記錄錯誤
+                if (isset($filled_mapping[$page_name]) && !is_array($filled_mapping[$page_name])) {
+                    $deployer->log("警告: {$page_name} 的 filled_mapping 不是陣列，類型為: " . gettype($filled_mapping[$page_name]));
+                }
             }
             
             // 判斷是否為全域模板

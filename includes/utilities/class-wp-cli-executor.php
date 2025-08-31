@@ -125,13 +125,42 @@ class WP_CLI_Executor
         
         if ($result['return_code'] === 0) {
             // --porcelain 參數會讓 wp media import 只輸出 attachment ID
-            $attachment_id = intval(trim($result['output']));
+            $attachment_id = $this->extract_numeric_id($result['output']);
             $result['attachment_id'] = $attachment_id;
         } else {
             $result['attachment_id'] = null;
         }
         
         return $result;
+    }
+    
+    /**
+     * 從 WP-CLI 輸出中提取純數字 ID
+     * 
+     * @param string $output WP-CLI 輸出
+     * @return int|null 提取的 ID 或 null
+     */
+    private function extract_numeric_id($output)
+    {
+        $output_lines = explode("\n", trim($output));
+        
+        foreach ($output_lines as $line) {
+            $line = trim($line);
+            // 跳過系統訊息
+            if (strpos($line, 'WP-CLI') !== false || 
+                strpos($line, '指令已註冊') !== false ||
+                strpos($line, 'Warning:') !== false ||
+                strpos($line, 'Notice:') !== false) {
+                continue;
+            }
+            
+            // 找到純數字的行
+            if (is_numeric($line) && $line > 0) {
+                return intval($line);
+            }
+        }
+        
+        return null;
     }
     
     /**
@@ -160,17 +189,25 @@ class WP_CLI_Executor
             $result = $this->execute("post create", $params);
             
             if ($result['return_code'] === 0) {
-                $post_id = intval(trim($result['output']));
-                $result['post_id'] = $post_id;
+                // 使用輔助方法提取文章ID
+                $post_id = $this->extract_numeric_id($result['output']);
                 
-                // 然後更新內容
-                $update_params = [
-                    'post_content' => $content
-                ];
-                $update_result = $this->execute("post update {$post_id}", $update_params);
-                
-                if ($update_result['return_code'] !== 0) {
-                    $result['error'] = "文章建立成功但內容更新失敗: " . $update_result['output'];
+                if ($post_id === null) {
+                    $result['return_code'] = 1;
+                    $result['error'] = "無法從輸出中解析文章ID: " . $result['output'];
+                    $result['post_id'] = null;
+                } else {
+                    $result['post_id'] = $post_id;
+                    
+                    // 然後更新內容
+                    $update_params = [
+                        'post_content' => $content
+                    ];
+                    $update_result = $this->execute("post update {$post_id}", $update_params);
+                    
+                    if ($update_result['return_code'] !== 0) {
+                        $result['error'] = "文章建立成功但內容更新失敗: " . $update_result['output'];
+                    }
                 }
             }
         } else {
@@ -189,16 +226,21 @@ class WP_CLI_Executor
             $result = $this->execute("post create", $params);
             
             if ($result['return_code'] === 0) {
-                $post_id = intval(trim($result['output']));
-                $result['post_id'] = $post_id;
+                // 使用輔助方法提取文章ID
+                $post_id = $this->extract_numeric_id($result['output']);
+                
+                if ($post_id === null) {
+                    $result['return_code'] = 1;
+                    $result['error'] = "無法從輸出中解析文章ID: " . $result['output'];
+                    $result['post_id'] = null;
+                } else {
+                    $result['post_id'] = $post_id;
+                }
             }
         }
         
-        // 確保 post_id 設定正確
-        if ($result['return_code'] === 0 && !isset($result['post_id'])) {
-            $post_id = intval(trim($result['output']));
-            $result['post_id'] = $post_id;
-        } elseif ($result['return_code'] !== 0) {
+        // 確保 post_id 設定正確（已經在上面處理過了，這裡只是最終檢查）
+        if ($result['return_code'] !== 0 && !isset($result['post_id'])) {
             $result['post_id'] = null;
         }
         
@@ -402,11 +444,21 @@ class WP_CLI_Executor
     public function menu_exists($menu_name)
     {
         $result = $this->execute("menu list --format=csv --fields=name,slug");
-        if ($result['return_code'] === 0) {
+        if ($result['return_code'] === 0 && !empty(trim($result['output']))) {
             $lines = explode("\n", trim($result['output']));
+            // 移除空行
+            $lines = array_filter($lines, function($line) {
+                return !empty(trim($line));
+            });
+            
             foreach ($lines as $line) {
-                if (strpos($line, $menu_name) !== false) {
-                    return true;
+                $parts = str_getcsv($line, ',', '"', '\\');
+                if (isset($parts[0]) && isset($parts[1])) {
+                    $name = trim($parts[0]);
+                    $slug = trim($parts[1]);
+                    if ($name === $menu_name || $slug === $menu_name) {
+                        return true;
+                    }
                 }
             }
         }
@@ -442,12 +494,22 @@ class WP_CLI_Executor
     public function get_menu_id($menu_name)
     {
         $result = $this->execute("menu list --format=csv --fields=term_id,name");
-        if ($result['return_code'] === 0) {
+        if ($result['return_code'] === 0 && !empty(trim($result['output']))) {
             $lines = explode("\n", trim($result['output']));
+            // 移除空行
+            $lines = array_filter($lines, function($line) {
+                return !empty(trim($line));
+            });
+            
             foreach ($lines as $line) {
                 $parts = str_getcsv($line, ',', '"', '\\');
-                if (isset($parts[1]) && $parts[1] === $menu_name) {
-                    return intval($parts[0]);
+                if (isset($parts[0]) && isset($parts[1])) {
+                    $term_id = trim($parts[0]);
+                    $name = trim($parts[1]);
+                    if ($name === $menu_name) {
+                        $menu_id = intval($term_id);
+                        return $menu_id > 0 ? $menu_id : null;
+                    }
                 }
             }
         }
@@ -502,20 +564,30 @@ class WP_CLI_Executor
         $result = $this->execute("menu location list --format=csv --fields=location,description");
         $locations = [];
         
-        if ($result['return_code'] === 0) {
+        if ($result['return_code'] === 0 && !empty(trim($result['output']))) {
             $lines = explode("\n", trim($result['output']));
-            array_shift($lines); // 移除標題行
+            // 移除空行
+            $lines = array_filter($lines, function($line) {
+                return !empty(trim($line));
+            });
             
-            foreach ($lines as $line) {
-                if (!empty($line)) {
+            if (count($lines) > 1) {
+                array_shift($lines); // 移除標題行
+                
+                foreach ($lines as $line) {
                     $parts = str_getcsv($line, ',', '"', '\\');
-                    if (isset($parts[0])) {
-                        $location = $parts[0];
-                        $description = $parts[1] ?? '';
+                    if (isset($parts[0]) && !empty(trim($parts[0]))) {
+                        $location = trim($parts[0]);
+                        $description = isset($parts[1]) ? trim($parts[1]) : '';
                         $locations[$location] = $description;
                     }
                 }
             }
+        }
+        
+        // 如果沒有找到位置，記錄調試資訊
+        if (empty($locations)) {
+            error_log("WP_CLI_Executor: No menu locations found. Command output: " . $result['output']);
         }
         
         return $locations;
@@ -532,8 +604,14 @@ class WP_CLI_Executor
         $result = $this->execute("post list --post_type=page --name={$slug} --format=csv --fields=ID");
         if ($result['return_code'] === 0) {
             $lines = explode("\n", trim($result['output']));
+            // 移除空行
+            $lines = array_filter($lines, function($line) {
+                return !empty(trim($line));
+            });
+            
             if (count($lines) >= 2) {
-                return intval($lines[1]); // 跳過標題行
+                $page_id = intval(trim($lines[1])); // 跳過標題行
+                return $page_id > 0 ? $page_id : null;
             }
         }
         return null;

@@ -535,20 +535,62 @@ foreach ($prompts as $index => $article_prompt) {
         // 15.2 分析文章並生成精選圖片提示詞
         $deployer->log("  15.2 生成圖片提示詞...");
         
+        // 載入圖片風格配置
+        $image_style_config = $config->get('ai_features.image_style', []);
+        $style_preference = $image_style_config['style'] ?? 'realistic';
+        $enable_humaaans = $image_style_config['enable_humaaans'] ?? false;
+        
+        $deployer->log("  精選圖片風格設定: {$style_preference}" . ($enable_humaaans ? " (Humaaans 已啟用)" : ""));
+        
+        // 載入品牌色彩資訊
+        $brand_info = $processed_data['confirmed_data'] ?? [];
+        $color_scheme = $brand_info['color_scheme'] ?? [];
+        $primary_color = $color_scheme['primary'] ?? '#2563EB';
+        $secondary_color = $color_scheme['secondary'] ?? '#38BDF8';
+        $text_color = $color_scheme['text'] ?? '#1E293B';
+        $accent_color = $color_scheme['accent'] ?? '#0F172A';
+        
+        $color_description = "deep blue ({$primary_color}), light blue ({$secondary_color}), with subtle dark gray ({$accent_color}) accents";
+        
+        // 根據風格設定生成提示詞指令
+        if ($style_preference === 'humaaans' && $enable_humaaans) {
+            $style_guidance = "
+## 🎨 Humaaans 風格要求 (優先級最高)
+**必須使用 Humaaans 扁平插圖風格**，參考以下範例格式：
+
+### Humaaans 風格核心特徵：
+- **扁平化插圖設計** (Flat illustration)
+- **簡潔的幾何形狀和線條** (Simple geometric shapes, clean lines)  
+- **友善、親和的人物形象** (Friendly, approachable character design)
+- **統一的色彩系統** (Consistent color palette: {$color_description})
+- **Vector art aesthetic** (向量藝術美學)
+- **Minimalist composition** (極簡構圖)
+
+範例格式：
+\"A modern flat illustration in the style of humaaans, featuring [article-related scene]. The scene represents [core concept from article]. The background is a clean, abstract geometric composition with overlapping shapes. The entire image uses a strict and professional color palette of {$color_description}. Clean lines, vector art aesthetic, plenty of negative space for text overlay. Purely visual imagery, no text, no words, no letters.\"";
+        } else {
+            $style_guidance = "
+## 🎨 寫實攝影風格要求
+使用專業攝影風格，真實場景和人物，高品質視覺效果，色彩搭配: {$color_description}。";
+        }
+        
         $image_prompt_instruction = "你是一位專業的藝術總監。請仔細閱讀以下文章內容，然後為其設計一張精選圖片。
 
 文章內容：
 {$article_content}
 
+{$style_guidance}
+
 請分析文章的核心主題、情感氛圍和視覺元素，然後生成一個詳細的英文圖片提示詞。
 
 要求：
-1. 提示詞必須是英文
-2. 描述要具體且富有視覺感
-3. 包含藝術風格建議（如 modern, minimalist, warm lighting 等）
+1. **【風格優先】**" . ($style_preference === 'humaaans' && $enable_humaaans ? " 必須嚴格遵循上述 Humaaans 風格要求" : " 使用專業寫實攝影風格") . "
+2. 提示詞必須是英文
+3. 描述要具體且富有視覺感
 4. 適合作為部落格文章的精選圖片
-5. 避免包含具體的文字或數字
-6. 長度控制在 200 字以內
+5. 必須融入品牌色彩方案: {$color_description}
+6. 【重要】提示詞結尾必須加上 \"no text, no words, no letters, purely visual imagery\"
+7. 長度控制在 200 字以內
 
 請直接輸出英文提示詞，不要包含任何中文說明。";
 

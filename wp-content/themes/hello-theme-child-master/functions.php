@@ -54,50 +54,27 @@ function hello_elementor_child_scripts_styles() {
 }
 add_action( 'wp_enqueue_scripts', 'hello_elementor_child_scripts_styles', 20 );
 
-function add_elementor_custom_styles() {
-    $custom_css = '
-    .elementor-widget-nav-menu .elementor-nav-menu--main .elementor-item {
-        color: var(--e-global-color-primary);
-    }
-    
-    .elementor-menu-toggle .e-font-icon-svg {
-        fill: var(--e-global-color-primary);
-    }
-    
-    .elementor-scrolling-tracker {
-        --scrolling-track-default-progress-color: var(--e-global-color-secondary);
-    }
-    
-    .elementor-widget-button .elementor-button {
-        background-color: var(--e-global-color-accent);
-    }
-    ';
-    
-    // 將 CSS 添加到子主題樣式表
-    wp_add_inline_style('hello-elementor-child-style', $custom_css);
-}
-add_action('wp_enqueue_scripts', 'add_elementor_custom_styles', 21);
-
 /**
  * 模組化載入主題功能
  * 
  * 載入 inc/ 目錄下的功能模組
  * 
  * @since 2.0.0
- * @version 2.0.0
+ * @version 2.0.1
  * 
  * 模組清單：
  * - theme-style-switcher.php: v1.0.0 - 主題樣式切換器
- * - theme-default-settings.php: v1.0.0 - 主題預設設定管理
+ * - theme-default-settings.php: v1.0.0 - 主題預設設定管理（已移除 JSON 匯入功能）
  * - elementor-dynamic-tags.php: v1.0.0 - Elementor 動態標籤擴展
- * - modular-page-system.php: v1.0.0 - 模組化頁面系統
  * - user-role-manager.php: v1.0.0 - 用戶角色權限管理
+ * - theme-access-control.php: v1.0.0 - 主題存取控制（限制只有 ID=1 可變更主題）
  */
 $modules = [
     'theme-style-switcher.php',      // 主題樣式切換功能
     'theme-default-settings.php',    // 預設設定管理
     'elementor-dynamic-tags.php',    // 動態標籤擴展
-    'user-role-manager.php'          // 用戶角色管理
+    'user-role-manager.php',         // 用戶角色管理
+    'theme-access-control.php'       // 主題存取控制
 ];
 
 foreach ($modules as $file) {

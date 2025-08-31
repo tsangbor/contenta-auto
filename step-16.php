@@ -452,7 +452,7 @@ function optimizePromptWithGemini($base_prompt, $gemini_config, $deployer)
             throw new Exception("Gemini API金鑰未設定");
         }
         
-        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=' . $api_key;
+        $url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=' . $api_key;
         
         $optimization_instruction = "You are a professional logo designer. Your task is to generate a logo design prompt based on the brand information provided. 
 

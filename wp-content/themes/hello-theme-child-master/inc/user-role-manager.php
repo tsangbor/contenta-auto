@@ -7,7 +7,7 @@
  * 
  * @package HelloElementorChild
  * @subpackage Modules/UserRoleManager
- * @version 1.0.1
+ * @version 1.0.2
  * @since 2.0.0
  * @author Your Name
  * 
@@ -98,6 +98,14 @@
  * - 完整 WP-CLI 指令支援
  * 
  * Changelog:
+ * 1.0.2 - 2025-07-18
+ * - 新增 ShortPixel API Key 隱藏功能
+ * - 只有 USER ID=1 可以看到 ShortPixel 設定頁面的 API Key 區塊
+ * - 新增 Elementor 官方範本庫隱藏功能
+ * - 只有 USER ID=1 可以看到 Elementor 官方範本（Cloud templates、Site templates）
+ * - 多重保護機制：CSS 隱藏 + JavaScript 備用方案
+ * - 自動檢測頁面並套用使用者限制
+ * 
  * 1.0.1 - 2025-07-07
  * - 新增完整 WP-CLI 指令系統
  * - 新增詳細使用指南和操作流程
@@ -211,9 +219,10 @@ function create_limited_admin_role() {
             'moderate_comments' => true,
             'upload_files' => true,
             'unfiltered_html' => true,      
+
             // 🔧 新增：選單管理權限
             'edit_theme_options' => true,   // 關鍵權限：主題選項編輯（包含選單管理）
-            
+
             // Elementor 權限（使用實際存在的權限）
             'create_notes_elementor-pro' => true,
             'edit_notes_elementor-pro' => true,
@@ -428,6 +437,12 @@ class PluginManagerControl {
         add_filter('network_admin_plugin_action_links', array($this, 'modify_plugin_actions'), 10, 4);
         add_action('delete_plugin', array($this, 'prevent_deletion'));
         add_action('admin_head-plugins.php', array($this, 'add_custom_styles'));
+        
+        // 新增 ShortPixel API Key 隱藏功能
+        add_action('admin_footer', array($this, 'hide_shortpixel_apikey_for_non_admin'));
+        
+        // 新增 Elementor 官方範本庫隱藏功能
+        add_action('init', array($this, 'hide_elementor_library_for_non_admin'));
     }
     
     /**
@@ -511,6 +526,147 @@ class PluginManagerControl {
         }
         </style>
         <?php
+    }
+    
+    /**
+     * 隱藏 ShortPixel API Key 設定（僅 USER ID=1 可見）
+     * 
+     * 只有 USER ID=1 的用戶可以在 ShortPixel 設定頁面看到 API Key 相關設定
+     * 其他用戶將無法看到包含 API Key 的 settinglist 區塊
+     * 
+     * @since 1.0.2
+     */
+    public function hide_shortpixel_apikey_for_non_admin() {
+        // 檢查是否在 ShortPixel 設定頁面
+        global $pagenow;
+        if ($pagenow !== 'options-general.php' || !isset($_GET['page']) || $_GET['page'] !== 'wp-shortpixel-settings') {
+            return;
+        }
+        
+        // 取得目前用戶 ID
+        $current_user_id = get_current_user_id();
+        
+        // 如果是 USER ID=1，顯示所有內容
+        if ($current_user_id === 1) {
+            return;
+        }
+        
+        // 其他用戶隱藏 API Key 相關設定
+        ?>
+        <style>
+        /* 隱藏包含 API Key 的 settinglist */
+        settinglist:has(closed-apikey-dropdown) {
+            display: none !important;
+        }
+        
+        /* 備用方案：直接隱藏 API Key 相關元素 */
+        closed-apikey-dropdown,
+        settinglist closed-apikey-dropdown,
+        settinglist content .apifield,
+        settinglist content #validate {
+            display: none !important;
+        }
+        
+        /* 隱藏包含 API Key 文字的 settinglist */
+        settinglist:has([id="key"]) {
+            display: none !important;
+        }
+        </style>
+        
+        <script>
+        jQuery(document).ready(function($) {
+            // JavaScript 備用方案：隱藏包含 API Key 的 settinglist
+            $('settinglist').each(function() {
+                var $settinglist = $(this);
+                
+                // 檢查是否包含 API Key 相關元素
+                if ($settinglist.find('closed-apikey-dropdown').length > 0 ||
+                    $settinglist.find('#key').length > 0 ||
+                    $settinglist.find('.apifield').length > 0 ||
+                    $settinglist.text().indexOf('API Key') !== -1) {
+                    
+                    $settinglist.hide();
+                    console.log('ShortPixel API Key setting hidden for non-admin user');
+                }
+            });
+        });
+        </script>
+        <?php
+    }
+    
+    /**
+     * 隱藏 Elementor 官方範本庫（僅 USER ID=1 可見）
+     * 
+     * 只有 USER ID=1 的用戶可以看到 Elementor 編輯器中的官方範本庫
+     * 其他用戶（包括管理員）都無法看到 Cloud templates、Site templates 等官方範本
+     * 
+     * @since 1.0.2
+     */
+    public function hide_elementor_library_for_non_admin() {
+        // 取得目前用戶 ID
+        $current_user_id = get_current_user_id();
+        
+        // 如果是 USER ID=1，顯示所有內容
+        if ($current_user_id === 1) {
+            return;
+        }
+        
+        // 其他用戶隱藏 Elementor 官方範本庫
+        add_action('elementor/editor/footer', function() {
+            ?>
+            <style>
+                /* 隱藏「Cloud templates」和「Site templates」按鈕 */
+                .elementor-template-library-header-menu a:first-of-type,
+                .elementor-template-library-header-menu a:nth-of-type(2),
+                [data-tab="templates/my-templates"] {
+                    display: none !important;
+                }
+
+                /* 讓剩餘的按鈕填滿寬度 */
+                .elementor-template-library-header-menu {
+                    width: 100%;
+                }
+                
+                /* 隱藏其他可能的官方範本相關元素 */
+                .elementor-template-library-template-remote,
+                .elementor-template-library-template[data-template-source="remote"] {
+                    display: none !important;
+                }
+            </style>
+            <script>
+            jQuery(document).ready(function($) {
+                // JavaScript 備用方案：動態隱藏官方範本
+                function hideElementorOfficialTemplates() {
+                    // 隱藏官方範本庫標籤
+                    $('.elementor-template-library-header-menu a').each(function() {
+                        var text = $(this).text().trim();
+                        if (text.indexOf('Cloud') !== -1 || 
+                            text.indexOf('Site') !== -1 || 
+                            text.indexOf('templates') !== -1) {
+                            $(this).hide();
+                        }
+                    });
+                    
+                    // 隱藏遠端範本
+                    $('.elementor-template-library-template-remote').hide();
+                    $('[data-template-source="remote"]').hide();
+                    
+                    console.log('Elementor official templates hidden for non-admin user');
+                }
+                
+                // 立即執行
+                hideElementorOfficialTemplates();
+                
+                // 監聽 Elementor 範本庫載入
+                $(document).on('DOMNodeInserted', function(e) {
+                    if ($(e.target).hasClass('elementor-template-library-header-menu')) {
+                        setTimeout(hideElementorOfficialTemplates, 100);
+                    }
+                });
+            });
+            </script>
+            <?php
+        });
     }
 }
 
@@ -713,7 +869,7 @@ class WP_CLI_User_Role_Command {
     }
 }
 
-// 註冊 WP-CLI 指令（已禁用以避免衝突）
-// if ( defined( 'WP_CLI' ) && WP_CLI ) {
-//     WP_CLI::add_command( 'user-role', 'WP_CLI_User_Role_Command' );
-// }
+// 註冊 WP-CLI 指令
+if ( defined( 'WP_CLI' ) && WP_CLI ) {
+    WP_CLI::add_command( 'user-role', 'WP_CLI_User_Role_Command' );
+}

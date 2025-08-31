@@ -236,18 +236,6 @@ try {
             [
                 'name' => '清理預設留言',
                 'command' => "cd {$document_root} && wp comment delete 1 --force --allow-root 2>/dev/null || true"
-            ],
-            
-            // 6. 新增 WordPress 安全性設定（在安裝完成後）
-            [
-                'name' => '新增 WordPress 安全性設定',
-                'command' => "cd {$document_root} && " .
-                    "cat >> wp-config.php << 'EOF'" . PHP_EOL .
-                    "" . PHP_EOL .
-                    "if (!defined('SHORTPIXEL_API_KEY')) {" . PHP_EOL .
-                    "    define('SHORTPIXEL_API_KEY', '4pSSVVJnUXIywAJirTal');" . PHP_EOL .
-                    "}" . PHP_EOL .
-                    "EOF"
             ]
         ];
         

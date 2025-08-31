@@ -97,7 +97,7 @@ function testGeminiPromptGeneration($original_prompt, $gemini_config, $image_sty
     
     // 呼叫 Gemini API
     $api_key = $gemini_config['api_key'];
-    $model = $gemini_config['model'] ?? 'gemini-2.0-flash-exp';
+    $model = $gemini_config['model'] ?? 'gemini-2.5-flash-lite';
     $base_url = $gemini_config['base_url'] ?? 'https://generativelanguage.googleapis.com/v1beta/models/';
     
     $data = [

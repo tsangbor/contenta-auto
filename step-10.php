@@ -49,7 +49,7 @@ try {
     // 4. 呼叫 AI 生成圖片
     $deployer->log("開始 AI 圖片生成");
     
-    $generated_images = generateImages($image_prompts, $images_dir, $ai_service, $config, $deployer);
+    $generated_images = generateImages($image_prompts, $images_dir, $ai_service, $config, $deployer, $work_dir);
     
     // 5. 建立 image-mapping.json（兼容 step-11 和 step-12）
     $image_mapping = buildImageMapping($generated_images, $image_placeholders, $deployer);
@@ -112,7 +112,7 @@ function extractImagePlaceholders($work_dir, $job_id, $deployer)
         $template_name = basename($file, '-ai.json');
         $content = file_get_contents($file);
         
-        if (preg_match_all('/\{\{([^}]+(?:_BG|_PHOTO|_IMG|_IMAGE|_LOGO|_ICON))\}\}/', $content, $matches)) {
+        if (preg_match_all('/\{\{([^}]*(?:_BG|_PHOTO|_IMG|_IMAGE|_LOGO|_ICON)\d*)\}\}/', $content, $matches)) {
             foreach ($matches[1] as $placeholder) {
                 $key = $job_id . '_' . $template_name . '_' . strtolower(str_replace('_', '-', $placeholder));
                 
@@ -148,7 +148,7 @@ function extractImagePlaceholders($work_dir, $job_id, $deployer)
             $template_name = basename($file, '-ai.json');
             $content = file_get_contents($file);
             
-            if (preg_match_all('/\{\{([^}]+(?:_BG|_PHOTO|_IMG|_IMAGE|_LOGO|_ICON))\}\}/', $content, $matches)) {
+            if (preg_match_all('/\{\{([^}]*(?:_BG|_PHOTO|_IMG|_IMAGE|_LOGO|_ICON)\d*)\}\}/', $content, $matches)) {
                 foreach ($matches[1] as $placeholder) {
                     $key = $job_id . '_' . $template_name . '_' . strtolower(str_replace('_', '-', $placeholder));
                     
@@ -179,31 +179,41 @@ function extractImagePlaceholders($work_dir, $job_id, $deployer)
  */
 function getContainerTypeFromPlaceholder($placeholder)
 {
-    // 根據佔位符名稱推斷容器類型
-    if (strpos($placeholder, 'HERO_') === 0) {
-        return 'hero';
-    } elseif (strpos($placeholder, 'ABOUT_') === 0) {
-        return 'about';
-    } elseif (strpos($placeholder, 'SERVICE_') === 0) {
-        return 'service';
-    } elseif (strpos($placeholder, 'CONTACT_') === 0) {
-        return 'contact';
-    } elseif (strpos($placeholder, 'CTA_') === 0) {
-        return 'cta';
-    } elseif (strpos($placeholder, 'FAQ_') === 0) {
-        return 'faq';
-    } elseif (strpos($placeholder, 'ARCHIVE_') === 0) {
-        return 'archive';
-    } elseif (strpos($placeholder, 'FOOTER_') === 0) {
-        return 'footer';
-    } elseif (strpos($placeholder, 'HEADER_') === 0) {
-        return 'header';
+    // 根據佔位符的後綴標籤推斷容器類型（僅處理圖片類型）
+    if (preg_match('/_BG\d*$/', $placeholder)) {
+        return 'hero'; // 背景圖通常用於 hero 區塊
+    } elseif (preg_match('/_PHOTO\d*$/', $placeholder)) {
+        return 'about'; // 照片通常用於 about 區塊
+    } elseif (preg_match('/_IMAGE\d*$/', $placeholder)) {
+        return 'service'; // 圖片通常用於 service 區塊
+    } elseif (preg_match('/_IMG\d*$/', $placeholder)) {
+        return 'service'; // IMG 也歸類為 service
+    } elseif (preg_match('/_LOGO\d*$/', $placeholder)) {
+        return 'header'; // 標誌通常用於 header 區塊
+    } elseif (preg_match('/_ICON\d*$/', $placeholder)) {
+        return 'clients'; // 圖標通常用於 clients 區塊
     } else {
-        // 如果無法識別，嘗試從更寬泛的規則推斷
-        if (strpos($placeholder, '_BG') !== false) {
-            return 'hero'; // 背景圖通常用於 hero 區塊
-        } elseif (strpos($placeholder, '_PHOTO') !== false || strpos($placeholder, '_IMAGE') !== false) {
-            return 'about'; // 照片和圖片通常用於 about 或 service
+        // 如果無法從標籤識別，嘗試從前綴推斷（保留部分舊邏輯作為備援）
+        if (strpos($placeholder, 'HERO_') === 0 || strpos($placeholder, 'HOME_HERO_') === 0) {
+            return 'hero';
+        } elseif (strpos($placeholder, 'ABOUT_') === 0) {
+            return 'about';
+        } elseif (strpos($placeholder, 'SERVICE_') === 0) {
+            return 'service';
+        } elseif (strpos($placeholder, 'CONTACT_') === 0) {
+            return 'contact';
+        } elseif (strpos($placeholder, 'CTA_') === 0) {
+            return 'cta';
+        } elseif (strpos($placeholder, 'FAQ_') === 0) {
+            return 'faq';
+        } elseif (strpos($placeholder, 'ARCHIVE_') === 0) {
+            return 'archive';
+        } elseif (strpos($placeholder, 'FOOTER_') === 0) {
+            return 'footer';
+        } elseif (strpos($placeholder, 'HEADER_') === 0) {
+            return 'header';
+        } elseif (strpos($placeholder, 'CLIENTS_') === 0) {
+            return 'clients';
         } else {
             return 'unknown';
         }
@@ -234,6 +244,14 @@ function getContainerInfo($container_name, $container_manifest)
 }
 
 /**
+ * 取得預設的負面提示詞，防止生成UI介面
+ */
+function getDefaultNegativePrompt()
+{
+    return "realistic, photographic, 3d render, watermark, text, words, letters, website screenshot, browser window, UI interface, mobile screen, computer screen, digital device interface, mockup, file icon, preview window, application interface";
+}
+
+/**
  * 使用 AI 生成圖片提示詞
  */
 function generateImagePrompts($placeholders, $work_dir, $ai_service, $config, $deployer)
@@ -254,12 +272,16 @@ function generateImagePrompts($placeholders, $work_dir, $ai_service, $config, $d
         $site_config = file_exists($site_config_file) ? json_decode(file_get_contents($site_config_file), true) : [];
         
         // 從 processed_data.json 讀取完整品牌資訊
+        $raw_brand_keywords = $processed_data['confirmed_data']['brand_keywords'] ?? [];
+        $raw_service_categories = $processed_data['confirmed_data']['service_categories'] ?? [];
+        
         $brand_info = [
             'name' => $processed_data['website_name'] ?? $site_config['site_title'] ?? '網站',
             'description' => $processed_data['website_description'] ?? $site_config['site_description'] ?? '',
             'brand_personality' => $processed_data['confirmed_data']['brand_personality'] ?? '專業、親和',
             'target_audience' => $processed_data['confirmed_data']['target_audience'] ?? $site_config['target_audience'] ?? '一般用戶',
-            'brand_keywords' => $processed_data['confirmed_data']['brand_keywords'] ?? [],
+            'brand_keywords' => is_array($raw_brand_keywords) ? implode(', ', $raw_brand_keywords) : (string)$raw_brand_keywords,
+            'service_categories' => is_array($raw_service_categories) ? implode(', ', $raw_service_categories) : (string)$raw_service_categories,
             'unique_value' => $processed_data['confirmed_data']['unique_value'] ?? '',
             'color_scheme' => $processed_data['confirmed_data']['color_scheme'] ?? []
         ];
@@ -271,7 +293,8 @@ function generateImagePrompts($placeholders, $work_dir, $ai_service, $config, $d
             'description' => $site_config['site_description'] ?? '',
             'brand_personality' => $site_config['brand_tone'] ?? '專業、親和',
             'target_audience' => $site_config['target_audience'] ?? '一般用戶',
-            'brand_keywords' => [],
+            'brand_keywords' => '',
+            'service_categories' => '',
             'unique_value' => '',
             'color_scheme' => []
         ];
@@ -305,129 +328,86 @@ function generateImagePrompts($placeholders, $work_dir, $ai_service, $config, $d
     
     $deployer->log("圖片風格設定: {$style_preference}" . ($enable_humaaans ? " (Humaaans 已啟用)" : ""));
 
-    $prompt = "你是一位專業的圖片提示詞生成師。請根據以下品牌資訊，為每個圖片佔位符生成詳細的英文圖片提示詞。
-
-## 品牌資訊
-- 品牌名稱：{$brand_info['name']}
-- 品牌描述：{$brand_info['description']}
-- 品牌個性：{$brand_info['brand_personality']}
-- 目標受眾：{$brand_info['target_audience']}
-- 品牌關鍵字：{$keywords_str}
-- 獨特價值：{$brand_info['unique_value']}
-- 色彩方案：{$color_description}
-
-## 圖片佔位符清單與其所在的佈局情境
-你必須根據每個佔位符所在的「容器描述」，來生成最匹配該佈局風格的圖片。
-";
-
+    // 按類型分組佔位符
+    $grouped_placeholders = [];
     foreach ($placeholders as $key => $info) {
-        $container_name = $info['container_name'] ?? 'unknown';
-        $container_info = getContainerInfo($container_name, $container_manifest);
-        
-        $prompt .= "- {$key}:\n";
-        $prompt .= "  - 佔位符: {{" . $info['placeholder'] . "}}\n";
-        $prompt .= "  - 所在模板: " . $info['template'] . "\n";
-        $prompt .= "  - 所在容器: {$container_name}\n";
-        
-        if (!empty($container_info)) {
-            $prompt .= "  - 容器描述: \"" . ($container_info['description'] ?? '標準容器佈局') . "\"\n";
-            $prompt .= "  - 容器風格: " . json_encode($container_info['style'] ?? ['professional']) . "\n";
-        } else {
-            $prompt .= "  - 容器描述: \"標準容器佈局\"\n";
-            $prompt .= "  - 容器風格: [\"professional\"]\n";
+        $placeholder = $info['placeholder'];
+        if (preg_match('/_BG\d*$/', $placeholder)) {
+            $grouped_placeholders['背景'][] = $key;
+        } elseif (preg_match('/_PHOTO\d*$/', $placeholder)) {
+            $grouped_placeholders['人物'][] = $key;
+        } elseif (preg_match('/_IMG|_IMAGE\d*$/', $placeholder)) {
+            $grouped_placeholders['圖片'][] = $key;
+        } elseif (preg_match('/_LOGO\d*$/', $placeholder)) {
+            $grouped_placeholders['標誌'][] = $key;
+        } elseif (preg_match('/_ICON\d*$/', $placeholder)) {
+            $grouped_placeholders['圖示'][] = $key;
         }
-        $prompt .= "\n";
+    }
+    
+    $prompt = "圖片提示詞生成師。
+
+品牌：{$brand_info['name']}
+個性：{$brand_info['brand_personality']}
+關鍵字：{$keywords_str}
+色彩：{$color_description}
+
+佔位符分組：";
+    
+    foreach ($grouped_placeholders as $type => $keys) {
+        $prompt .= "\n{$type}({" . count($keys) . "}個): " . implode(', ', $keys);
     }
 
-    // 根據風格偏好添加風格指導
-    if ($style_preference === 'humaaans' && $enable_humaaans) {
-        $style_guidance = "
-## 🎨 Humaaans 風格要求 (優先級最高)
-**必須使用 Humaaans 扁平插圖風格**，參考以下範例格式：
+    $style_guidance = "
 
-\"A modern flat illustration in the style of humaaans, featuring minimalist characters collaborating and interacting with abstract data nodes. The scene represents interconnected systems and knowledge sharing. The background is a clean, abstract geometric composition with overlapping shapes. The entire image uses a strict and professional color palette of deep blue (#2563EB), light blue (#38BDF8), with subtle dark gray (#0F172A) accents. Clean lines, vector art aesthetic, plenty of negative space for text overlay. Purely visual imagery, no text, no words, no letters.\"
+核心模板：
+\$HUMAAANS = \"Flat vector illustration in 'Humaaans' style by Pablo Stanley, minimalist modern cartoon, solid pastel colors, no outlines except for facial features, clean background. [內容], {$color_description}. no text, no words, no letters, purely visual imagery\"
 
-### Humaaans 風格核心特徵：
-- **扁平化插圖設計** (Flat illustration)
-- **簡潔的幾何形狀和線條** (Simple geometric shapes, clean lines)
-- **友善、親和的人物形象** (Friendly, approachable character design)
-- **統一的色彩系統** (Consistent color palette)
-- **Vector art aesthetic** (向量藝術美學)
-- **Minimalist composition** (極簡構圖)
+風格分配：背景/圖片/標誌/圖示：使用 \$HUMAAANS 模板 | 人物：可選 \$HUMAAANS 或專業攝影
 
-### 針對不同佔位符的 Humaaans 風格指導：
-- **_BG (背景)**: \"Abstract flat illustration background in the style of humaaans, geometric shapes, clean composition suitable for text overlay\"
-- **_PHOTO (人物)**: \"Flat illustration of [character] in the style of humaaans, friendly geometric features, simple character design\"  
-- **_IMG/_IMAGE (圖片)**: \"Flat illustration in the style of humaaans featuring [subject], minimalist vector design\"
-- **_LOGO (標誌)**: \"Minimalist logo in the style of humaaans flat illustration, simple geometric elements\"
-- **_ICON (圖示)**: \"Simple flat icon in the style of humaaans, geometric design, vector art\"";
-    } else {
-        $style_guidance = "
-## 🎨 寫實攝影風格要求
-使用專業攝影風格，真實場景和人物，高品質視覺效果。";
-    }
+禁止清單：UI界面、網頁截圖、數位設備、功能性描述詞
 
-    $prompt .= $style_guidance . "
+尺寸分配：背景:1312x736 | 人物/圖示:1024x1024 | 標誌:1280x800
 
-## 生成要求
-1. **【風格優先】**" . ($style_preference === 'humaaans' && $enable_humaaans ? " 必須嚴格遵循上述 Humaaans 風格要求" : " 使用專業攝影風格") . "
-2. 每個圖片提示詞要具體詳細，包含風格、顏色、構圖等
-3. 提示詞必須是英文
-4. 【重要】每個提示詞結尾必須加上 \"no text, no words, no letters, purely visual imagery\"
-5. 必須融入上述品牌色彩方案中的顏色描述
-6. 必須體現品牌個性和關鍵字的視覺意象
-7. 【新增】必須根據容器描述和風格，生成最匹配該佈局環境的圖片
-8. 【新增】為每個圖片加入負面提示詞以提升品質
-9. 【新增】維持整體視覺風格一致性，除非容器類型有特殊需求
-10. 針對不同類型的佔位符生成相應風格：
-   - _BG (背景): 抽象或場景背景，要考慮容器的文字佈局和遮罩需求
-   - _PHOTO (照片): 符合目標受眾特徵的人物或場景，體現品牌個性
-   - _IMG/_IMAGE (圖片): 與服務內容和品牌關鍵字相關的視覺元素
-   - _LOGO (標誌): 簡約但包含品牌特色的設計元素
-   - _ICON (圖示): 與品牌關鍵字相關的簡單圖示
+請確認您要為所有 " . count($placeholders) . " 個佔位符生成提示詞。
 
-## 範例格式（請參考但不要照抄）" . 
-    ($style_preference === 'humaaans' && $enable_humaaans ? "
-### Humaaans 風格範例：
-\"home_hero-bg\": {
-    \"prompt\": \"A modern flat illustration in the style of humaaans, featuring minimalist characters collaborating and interacting with abstract data nodes. The scene represents interconnected systems and knowledge sharing. The background is a clean, abstract geometric composition with overlapping shapes. The entire image uses the brand color palette of {$color_description}. Clean lines, vector art aesthetic, plenty of negative space for text overlay, no text, no words, no letters, purely visual imagery\",
-    \"negative_prompt\": \"realistic, photographic, 3d render, watermark, text, words, letters, busy composition, harsh shadows\",
-    \"style\": \"flat illustration\",
-    \"size\": \"1312x736\",
-    \"quality\": \"standard\"
-}
+直接回傳純淨 JSON，以 { 開始，以 } 結束，不要 ```json 標記，不要任何說明文字。
 
-\"about_hero-photo\": {
-    \"prompt\": \"Flat illustration of a friendly professional consultant in the style of humaaans, simple geometric facial features, wearing business casual attire, modern office background with abstract geometric elements, {$color_description}, minimalist character design, approachable and trustworthy appearance, no text, no words, no letters, purely visual imagery\",
-    \"negative_prompt\": \"realistic, photographic, detailed facial features, 3d render, watermark, text, words, letters\",
-    \"style\": \"flat illustration\",
-    \"size\": \"1024x1024\",
-    \"quality\": \"standard\"
-}" : "
-### 寫實攝影風格範例：
-\"home_hero-bg\": {
-    \"prompt\": \"Peaceful forest scene with soft morning light filtering through trees, {$color_description}, calming healing atmosphere, cinematic composition with center focus area for text overlay, natural therapeutic environment, no text, no words, no letters, purely visual imagery\",
-    \"negative_prompt\": \"blurry, cartoon, 3d render, watermark, text, words, letters, busy composition, harsh lighting\",
-    \"style\": \"cinematic\",
-    \"size\": \"1312x736\",
-    \"quality\": \"standard\"
-}")
-
-請以 JSON 格式回應，格式如下：
+輸出格式範例：
 {
-    \"key1\": {
-        \"prompt\": \"詳細英文提示詞（必須包含品牌色彩、容器適配和結尾的無文字聲明）\",
-        \"negative_prompt\": \"負面提示詞以提升圖片品質\",
-        \"style\": \"攝影風格如 professional/abstract/minimalist/natural/cinematic\",
-        \"size\": \"根據圖片類型選擇適當尺寸：背景圖(_BG)使用1312x736(16:9)，人像照片(_PHOTO)使用1024x1024(1:1)，圖示(_ICON)使用1024x1024(1:1)，標誌(_LOGO)使用1280x800(16:10)\",
-        \"quality\": \"standard\"
+    \"2507090145-9074_about_page-bg\": {
+        \"prompt\": \"Flat vector illustration in 'Humaaans' style by Pablo Stanley...\",
+        \"size\": \"1312x736\"
+    },
+    \"2507090145-9074_blog_page-bg\": {
+        \"prompt\": \"Flat vector illustration in 'Humaaans' style by Pablo Stanley...\",
+        \"size\": \"1312x736\"
     }
-}
+}";
 
-只回傳 JSON，不要額外說明。";
+    // 替換模板變數
+    $style_guidance = str_replace([
+        '{service_categories}',
+        '{brand_personality}',
+        '{unique_value}',
+        '{target_audience}',
+        '{brand_keywords}'
+    ], [
+        $brand_info['service_categories'],
+        $brand_info['brand_personality'],
+        $brand_info['unique_value'],
+        $brand_info['target_audience'],
+        $brand_info['brand_keywords']
+    ], $style_guidance);
 
-    $deployer->log("呼叫 AI 生成圖片提示詞...");
-    $deployer->log("提示詞長度: " . strlen($prompt) . " 字元");
+    $prompt .= $style_guidance;
+
+    $deployer->log("優化後提示詞長度: " . strlen($prompt) . " 字元");
+    
+    // 儲存用於生成圖片提示詞的 AI 提示詞
+    $ai_prompt_file = $work_dir . '/ai-text-prompt-optimized-' . $ai_service . '.txt';
+    file_put_contents($ai_prompt_file, $prompt);
+    $deployer->log("儲存優化版 AI 提示詞: $ai_prompt_file");
     
     if ($ai_service === 'gemini') {
         $response = callGeminiAPI($prompt, $config, $deployer);
@@ -440,19 +420,248 @@ function generateImagePrompts($placeholders, $work_dir, $ai_service, $config, $d
         return generateDefaultImagePrompts($placeholders);
     }
     
+    // 儲存原始 AI 回應以供調試
+    $raw_response_file = $work_dir . '/ai-response-raw-' . $ai_service . '.txt';
+    file_put_contents($raw_response_file, $response);
+    $deployer->log("儲存原始 AI 回應: $raw_response_file");
+    
     // 解析 AI 回應
     $response_text = trim($response);
+    $deployer->log("AI 回應長度: " . strlen($response_text) . " 字元");
+    $deployer->log("AI 回應開頭: " . substr($response_text, 0, 200) . "...");
+    
     if (strpos($response_text, '```json') !== false) {
         $response_text = preg_replace('/```json\s*|\s*```/', '', $response_text);
+        $deployer->log("移除 markdown 標記後長度: " . strlen($response_text) . " 字元");
     }
     
-    $prompts = json_decode($response_text, true);
-    if (!$prompts) {
-        $deployer->log("AI 回應解析失敗，使用預設提示詞");
+    $raw_prompts = json_decode($response_text, true);
+    if (!$raw_prompts) {
+        $deployer->log("JSON 解析錯誤: " . json_last_error_msg());
+        
+        // 嘗試修復常見的 JSON 問題
+        $fixed_json = $response_text;
+        
+        // 修復截斷的 JSON：查找最後一個完整的物件結尾
+        if (preg_match('/.*}(?=\s*No newline at end of file|\s*$)/s', $fixed_json, $matches)) {
+            $fixed_json = $matches[0];
+        }
+        
+        // 確保有結尾大括號
+        $open_braces = substr_count($fixed_json, '{');
+        $close_braces = substr_count($fixed_json, '}');
+        if ($open_braces > $close_braces) {
+            $fixed_json .= str_repeat('}', $open_braces - $close_braces);
+        }
+        
+        // 再次嘗試解析
+        $raw_prompts = json_decode($fixed_json, true);
+        if (!$raw_prompts) {
+            $deployer->log("JSON 修復失敗，使用預設提示詞");
+            return generateDefaultImagePrompts($placeholders);
+        }
+        
+        $deployer->log("JSON 修復成功");
+    }
+    
+    // 轉換 Gemini 的分組格式為我們需要的扁平格式
+    $prompts = [];
+    
+    // 處理新的結構化回應格式
+    
+    // 檢查是否為扁平結構（直接 image_id => 屬性）
+    $is_flat_structure = true;
+    foreach ($raw_prompts as $key => $value) {
+        if (!is_array($value) || !isset($value['prompt'])) {
+            $is_flat_structure = false;
+            break;
+        }
+    }
+    
+    if ($is_flat_structure) {
+        // 處理扁平結構格式
+        foreach ($raw_prompts as $image_id => $item_data) {
+            if (isset($item_data['prompt'])) {
+                $prompts[$image_id] = [
+                    'prompt' => $item_data['prompt'],
+                    'negative_prompt' => getDefaultNegativePrompt(),
+                    'style' => 'flat illustration',
+                    'size' => $item_data['size'] ?? '1024x1024',
+                    'quality' => 'standard'
+                ];
+            }
+        }
+    } else {
+        foreach ($raw_prompts as $brand_name => $brand_data) {
+            // 處理最新的簡化格式：直接使用類型作為鍵名
+            if (is_array($brand_data) && (isset($brand_data['背景']) || isset($brand_data['圖片']) || isset($brand_data['人物']) || isset($brand_data['圖示']))) {
+                foreach (['背景', '圖片', '人物', '圖示'] as $asset_type) {
+                    if (isset($brand_data[$asset_type]) && is_array($brand_data[$asset_type])) {
+                        foreach ($brand_data[$asset_type] as $item) {
+                            if (isset($item['name']) && isset($item['prompt'])) {
+                            $image_id = $item['name'];
+                            $final_prompt = $item['prompt'];
+                            $size = $item['size'] ?? '1024x1024';
+                            
+                            $prompts[$image_id] = [
+                                'prompt' => $final_prompt,
+                                'negative_prompt' => getDefaultNegativePrompt(),
+                                'style' => 'flat illustration',
+                                'size' => $size,
+                                'quality' => 'standard'
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        elseif (is_array($brand_data) && isset($brand_data['assets'])) {
+            // 處理最新的 assets 格式：assets -> 類型 -> image_id -> 屬性
+            $assets = $brand_data['assets'];
+            
+            foreach ($assets as $asset_type => $asset_items) {
+                if (is_array($asset_items)) {
+                    foreach ($asset_items as $image_id => $item_data) {
+                        // 跳過 count 等非 image_id 項目
+                        if ($image_id === 'count' || !is_array($item_data)) {
+                            continue;
+                        }
+                        
+                        // 直接使用 Gemini 生成的提示詞
+                        if (isset($item_data['prompt'])) {
+                            $prompts[$image_id] = [
+                                'prompt' => $item_data['prompt'],
+                                'negative_prompt' => getDefaultNegativePrompt(),
+                                'style' => 'flat illustration',
+                                'size' => $item_data['size'] ?? '1024x1024',
+                                'quality' => 'standard'
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        elseif (is_array($brand_data) && isset($brand_data['佔位符'])) {
+            // 處理新的結構格式：佔位符 -> 類型 -> [item_array]
+            $placeholder_data = $brand_data['佔位符'];
+            $humaaans_template = $brand_data['核心模板'] ?? '';
+            
+            // 從模板中提取實際的 HUMAAANS 定義
+            if (preg_match('/\$HUMAAANS = "([^"]+)"/', $humaaans_template, $matches)) {
+                $humaaans_template = $matches[1];
+            }
+            
+            foreach ($placeholder_data as $asset_type => $items) {
+                if (is_array($items)) {
+                    foreach ($items as $item) {
+                        if (isset($item['名稱']) && isset($item['內容'])) {
+                            $image_id = $item['名稱'];
+                            $content = $item['內容'];
+                            $size = $item['尺寸'] ?? '1024x1024';
+                            $style = $item['風格'] ?? '$HUMAAANS';
+                            
+                            // 根據風格生成提示詞
+                            if ($style === '專業攝影') {
+                                $final_prompt = $content . ', warm lighting, professional photography, no text, no words, no letters, purely visual imagery';
+                            } elseif ($style === '$HUMAAANS' && $humaaans_template) {
+                                $final_prompt = str_replace('[內容]', $content, $humaaans_template);
+                            } else {
+                                $final_prompt = $content . ', no text, no words, no letters, purely visual imagery';
+                            }
+                            
+                            $prompts[$image_id] = [
+                                'prompt' => $final_prompt,
+                                'negative_prompt' => getDefaultNegativePrompt(),
+                                'style' => 'flat illustration',
+                                'size' => $size,
+                                'quality' => 'standard'
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        elseif (is_array($brand_data) && isset($brand_data['placeholders'])) {
+            // 處理 placeholders 格式：placeholders -> 類型 -> [image_id_array]
+            $placeholder_data = $brand_data['placeholders'];
+            $humaaans_template = $brand_data['templates']['HUMAAANS'] ?? '';
+            $size_allocation = $brand_data['size_allocation'] ?? [];
+            
+            foreach ($placeholder_data as $asset_type => $image_ids) {
+                if (is_array($image_ids)) {
+                    // 取得此類型的尺寸
+                    $size = '1024x1024'; // 預設尺寸
+                    if ($asset_type === '背景') {
+                        $size = $size_allocation['背景'] ?? '1312x736';
+                    } elseif ($asset_type === '人物' || $asset_type === '圖示') {
+                        $size = $size_allocation['人物/圖示'] ?? '1024x1024';
+                    }
+                    
+                    foreach ($image_ids as $image_id) {
+                        // 生成適合的提示詞內容
+                        $content = '';
+                        switch ($asset_type) {
+                            case '背景':
+                                $content = 'Abstract background representing growth and transformation';
+                                break;
+                            case '圖片':
+                                $content = 'Illustration representing coaching and personal development';
+                                break;
+                            case '人物':
+                                $content = 'Professional headshot of a warm and genuine individual';
+                                break;
+                            case '圖示':
+                                $content = 'Simple icon representing progress and success';
+                                break;
+                        }
+                        
+                        // 對於人物使用專業攝影，其他使用 HUMAAANS 模板
+                        if ($asset_type === '人物') {
+                            $final_prompt = $content . ', warm lighting, professional photography, no text, no words, no letters, purely visual imagery';
+                        } elseif ($humaaans_template) {
+                            $final_prompt = str_replace('[內容]', $content, $humaaans_template);
+                        } else {
+                            $final_prompt = $content . ', no text, no words, no letters, purely visual imagery';
+                        }
+                        
+                        $prompts[$image_id] = [
+                            'prompt' => $final_prompt,
+                            'negative_prompt' => getDefaultNegativePrompt(),
+                            'style' => 'flat illustration',
+                            'size' => $size,
+                            'quality' => 'standard'
+                        ];
+                    }
+                }
+            }
+        }
+        // 處理舊格式的回退邏輯
+        elseif (is_array($brand_data)) {
+            foreach ($brand_data as $category => $items) {
+                if (is_array($items)) {
+                    foreach ($items as $item) {
+                        if (isset($item['image_id']) && isset($item['prompt'])) {
+                            $prompts[$item['image_id']] = [
+                                'prompt' => $item['prompt'],
+                                'negative_prompt' => getDefaultNegativePrompt(),
+                                'style' => 'flat illustration',
+                                'size' => $item['size'] ?? '1024x1024',
+                                'quality' => 'standard'
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+        }
+    }
+    
+    if (empty($prompts)) {
+        $deployer->log("轉換後的提示詞為空，使用預設提示詞");
         return generateDefaultImagePrompts($placeholders);
     }
     
-    $deployer->log("AI 圖片提示詞生成成功，共 " . count($prompts) . " 個");
+    $deployer->log("優化版圖片提示詞生成成功，共 " . count($prompts) . " 個");
     return $prompts;
 }
 
@@ -468,27 +677,27 @@ function generateDefaultImagePrompts($placeholders)
         
         if (strpos($placeholder, '_BG') !== false) {
             $prompt = "Abstract background image, professional design, soft gradient colors, modern minimalist style, no text, no words, no letters, purely visual imagery";
-            $negative_prompt = "blurry, cartoon, 3d render, watermark, text, words, letters";
+            $negative_prompt = "blurry, cartoon, 3d render, watermark, text, words, letters, website screenshot, browser window, UI interface, mobile screen, computer screen, digital device interface, mockup, file icon, preview window, application interface";
             $style = "abstract";
             $size = "1312x736"; // 16:9 適合背景圖
         } elseif (strpos($placeholder, '_PHOTO') !== false) {
             $prompt = "Professional portrait photography, natural lighting, warm atmosphere, business casual, no text, no words, no letters, purely visual imagery";
-            $negative_prompt = "blurry, amateur, bad lighting, text, words, letters";
+            $negative_prompt = "blurry, amateur, bad lighting, text, words, letters, website screenshot, browser window, UI interface, mobile screen, computer screen, digital device interface, mockup, file icon, preview window, application interface";
             $style = "professional";
             $size = "1024x1024"; // 1:1 適合人像照片
         } elseif (strpos($placeholder, '_LOGO') !== false) {
             $prompt = "Minimalist logo design, clean simple shapes, professional brand identity, transparent background, no text, no words, no letters, purely visual imagery";
-            $negative_prompt = "complex, cluttered, text, words, letters, realistic";
+            $negative_prompt = "complex, cluttered, text, words, letters, realistic, website screenshot, browser window, UI interface, mobile screen, computer screen, digital device interface, mockup, file icon, preview window, application interface";
             $style = "minimalist";
             $size = "1280x800"; // 16:10 適合標誌
         } elseif (strpos($placeholder, '_ICON') !== false) {
             $prompt = "Simple icon design, line art style, professional clean, minimalist, no text, no words, no letters, purely visual imagery";
-            $negative_prompt = "complex, detailed, text, words, letters, realistic";
+            $negative_prompt = "complex, detailed, text, words, letters, realistic, website screenshot, browser window, UI interface, mobile screen, computer screen, digital device interface, mockup, file icon, preview window, application interface";
             $style = "minimalist";
             $size = "1024x1024"; // 1:1 適合圖示
         } else {
             $prompt = "Professional image, high quality, modern design, clean composition, no text, no words, no letters, purely visual imagery";
-            $negative_prompt = "blurry, amateur, text, words, letters";
+            $negative_prompt = "blurry, amateur, text, words, letters, website screenshot, browser window, UI interface, mobile screen, computer screen, digital device interface, mockup, file icon, preview window, application interface";
             $style = "professional";
             $size = "1024x1024"; // 預設 1:1
         }
@@ -508,7 +717,7 @@ function generateDefaultImagePrompts($placeholders)
 /**
  * 生成圖片
  */
-function generateImages($image_prompts, $images_dir, $ai_service, $config, $deployer)
+function generateImages($image_prompts, $images_dir, $ai_service, $config, $deployer, $work_dir)
 {
     $generated_images = [];
     $failed_count = 0;
@@ -534,7 +743,7 @@ function generateImages($image_prompts, $images_dir, $ai_service, $config, $depl
         $deployer->log("生成圖片: $key");
         
         try {
-            $filename = generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $openai_config, $gemini_config, $ideogram_config, $deployer);
+            $filename = generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $openai_config, $gemini_config, $ideogram_config, $deployer, $work_dir);
             
             if ($filename) {
                 $generated_images[$key] = $filename;
@@ -561,7 +770,7 @@ function generateImages($image_prompts, $images_dir, $ai_service, $config, $depl
 /**
  * 生成單張圖片
  */
-function generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $openai_config, $gemini_config, $ideogram_config, $deployer)
+function generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $openai_config, $gemini_config, $ideogram_config, $deployer, $work_dir = null)
 {
     $prompt = $prompt_config['prompt'];
     $size = $prompt_config['size'] ?? '1024x1024';
@@ -606,7 +815,7 @@ function generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $op
             case 'gemini':
                 if (isset($gemini_config['api_key']) && !empty($gemini_config['api_key'])) {
                     $deployer->log("嘗試使用 Gemini 生成圖片");
-                    $image_data = generateImageWithGemini($prompt, $size, $quality, $gemini_config, $deployer);
+                    $image_data = generateImageWithGemini($prompt, $size, $quality, $gemini_config, $deployer, $work_dir, $key);
                     if (!$image_data && count($fallback_order) > 1) {
                         $deployer->log("🔄 Gemini 失敗");
                     }
@@ -634,11 +843,19 @@ function generateSingleImage($key, $prompt_config, $images_dir, $ai_service, $op
 /**
  * 使用 Gemini 生成圖片
  */
-function generateImageWithGemini($prompt, $size, $quality, $gemini_config, $deployer)
+function generateImageWithGemini($prompt, $size, $quality, $gemini_config, $deployer, $work_dir = null, $image_key = null)
 {
     $base_url = $gemini_config['base_url'] ?? 'https://generativelanguage.googleapis.com/v1beta/models/';
     $model = $gemini_config['model'] ?? 'gemini-2.0-flash-preview-image-generation';
     $api_key = $gemini_config['api_key'] ?? '';
+    
+    // 儲存傳送給 Gemini 的圖片生成提示詞
+    if ($work_dir && $image_key) {
+        $gemini_image_prompt = "Generate a high-quality image: " . $prompt . ". Professional, no text or words in the image.";
+        $gemini_prompt_file = $work_dir . '/gemini-image-prompt-' . $image_key . '.txt';
+        file_put_contents($gemini_prompt_file, $gemini_image_prompt);
+        $deployer->log("儲存 Gemini 圖片生成提示詞: $gemini_prompt_file");
+    }
     
     // 使用與 step-08 相同的 URL 構建方式
     $url = rtrim($base_url, '/') . '/' . $model . ':generateContent?key=' . $api_key;
@@ -994,7 +1211,7 @@ function buildImageMapping($generated_images, $placeholders, $deployer)
 function callGeminiAPI($prompt, $config, $deployer)
 {
     $api_key = $config->get('api_credentials.gemini.api_key');
-    $model = $config->get('api_credentials.gemini.model') ?? 'gemini-2.0-flash-exp';
+    $model = $config->get('api_credentials.gemini.model') ?? 'gemini-2.5-flash-lite';
     $base_url = $config->get('api_credentials.gemini.base_url') ?? 'https://generativelanguage.googleapis.com/v1beta/models/';
     
     // 使用與 step-08 相同的 URL 構建方式

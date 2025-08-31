@@ -269,14 +269,15 @@ class ThemeDefaultSettings {
      */
     public function __construct() {
         add_action('init', [$this, 'register_theme_settings']);
-        add_action('admin_menu', [$this, 'add_admin_menu']);
-        add_action('admin_init', [$this, 'register_admin_settings']);
+        // 移除 JSON 匯入選單和功能
+        // add_action('admin_menu', [$this, 'add_admin_menu']);
+        // add_action('admin_init', [$this, 'register_admin_settings']);
         
         // 註冊 Elementor 動態標籤
         add_action('elementor/dynamic_tags/register_tags', [$this, 'register_elementor_dynamic_tags']);
         
         // 整合 AI 佈局系統
-        add_action('theme_json_import_ai_layout', [$this, 'handle_ai_layout_import']);
+        // add_action('theme_json_import_ai_layout', [$this, 'handle_ai_layout_import']);
     }
 
     /**
