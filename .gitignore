@@ -32,7 +32,7 @@ tmp/
 *.temp
 
 # Data files (如果包含敏感資料)
-# data/
+data/
 
 # Archive files
 archive/
@@ -42,8 +42,7 @@ _archive/
 zip/
 
 # Config files with sensitive info
-config/deploy-config.json
-config/deploy-config-backup.json
+config/
 
 # JSON files with sensitive data (視需要調整)
 # json/
