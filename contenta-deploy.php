@@ -53,18 +53,21 @@ class ContentaDeployer
     private $single_step = true; // 預設為單一步驟執行
     private $job_log_file;
     public $ai_model = null; // 指定的 AI 模型
+    private $mode; // 部署模式: 'bt' 或 'luke'
     
-    public function __construct($job_id, $start_step = '00', $single_step = true, $ai_model = null)
+    public function __construct($job_id, $start_step = '00', $single_step = true, $ai_model = null, $mode = 'bt')
     {
         $this->job_id = $job_id;
         $this->start_step = $start_step;
         $this->single_step = $single_step;
         $this->ai_model = $ai_model;
+        $this->mode = $mode;
         $this->initializeJobLog();
         $this->loadJobData();
         $this->initializeSteps();
         $this->log("=== Contenta 部署系統啟動 ===");
         $this->log("Job ID: " . $this->job_id);
+        $this->log("執行模式 (Mode): " . $this->mode);
         $this->log("起始步驟: " . $this->start_step);
         if ($this->ai_model) {
             $this->log("指定 AI 模型: " . $this->ai_model);
@@ -242,7 +245,23 @@ class ContentaDeployer
         $step_start = microtime(true);
         
         try {
+            // --- 智慧路徑選擇邏輯 ---
+            // 1. 定義哪些步驟是有模式差異的
+            $mode_specific_steps = ['00', '03', '04', '05', '06', '07'];
+            
+            // 2. 預設的腳本路徑
             $script_file = DEPLOY_BASE_PATH . "/step-{$step_num}.php";
+            
+            // 3. 如果當前模式不是預設的 'bt'，且步驟在差異清單中，則嘗試尋找模式專屬檔案
+            if ($this->mode !== 'bt' && in_array($step_num, $mode_specific_steps)) {
+                $potential_script = DEPLOY_BASE_PATH . "/step-{$step_num}-{$this->mode}.php";
+                // 如果模式專屬檔案存在，就使用它
+                if (file_exists($potential_script)) {
+                    $script_file = $potential_script;
+                    $this->log("偵測到 '{$this->mode}' 模式，使用專屬腳本: " . basename($script_file));
+                }
+            }
+            // --- 邏輯結束 ---
             
             if (!file_exists($script_file)) {
                 throw new Exception("找不到步驟腳本: {$script_file}");
@@ -311,18 +330,23 @@ class ContentaDeployer
 try {
     // 檢查參數
     if ($argc < 2) {
-        echo "使用方式: php contenta-deploy.php [job_id] [--step=XX] [--all] [--ai=MODEL]\n";
+        echo "使用方式: php contenta-deploy.php [job_id] [--step=XX] [--all] [--ai=MODEL] [--mode=MODE]\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --step=00  (只執行步驟 00)\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --step=08  (只執行步驟 08)\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --all      (執行所有步驟)\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --step=08 --all  (從步驟 08 執行到最後)\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --step=08 --ai=gemini  (使用 Gemini AI)\n";
         echo "例如: php contenta-deploy.php 2506290730-3450 --step=08 --ai=openai  (使用 OpenAI)\n";
+        echo "例如: php contenta-deploy.php 2506290730-3450 --all --mode=luke  (使用 Luke API 模式)\n";
         echo "\n";
         echo "AI 模型選項:\n";
         echo "  --ai=openai   使用 OpenAI 模型\n";
         echo "  --ai=gemini   使用 Gemini 模型\n";
         echo "  (無參數時使用配置檔案的預設設定)\n";
+        echo "\n";
+        echo "部署模式選項:\n";
+        echo "  --mode=bt     使用寶塔面板模式 (預設)\n";
+        echo "  --mode=luke   使用 Luke API 模式\n";
         exit(1);
     }
     
@@ -330,6 +354,7 @@ try {
     $start_step = '00'; // 預設從步驟 00 開始
     $single_step = true; // 預設只執行單一步驟
     $ai_model = null; // 預設使用配置檔案設定
+    $mode = 'bt'; // 預設模式為 'bt'
     
     // 處理命令列參數
     if ($argc >= 3) {
@@ -343,6 +368,13 @@ try {
                 // 驗證 AI 模型參數
                 if (!in_array($ai_model, ['openai', 'gemini'])) {
                     echo "錯誤: AI 模型參數無效，支援的選項: openai, gemini\n";
+                    exit(1);
+                }
+            } elseif (strpos($arg, '--mode=') === 0) {
+                $mode = substr($arg, 7);
+                // 驗證部署模式參數
+                if (!in_array($mode, ['bt', 'luke'])) {
+                    echo "錯誤: 部署模式參數無效，支援的選項: bt, luke\n";
                     exit(1);
                 }
             }
@@ -369,7 +401,7 @@ try {
     }
     
     // 建立部署器並執行
-    $deployer = new ContentaDeployer($job_id, $start_step, $single_step, $ai_model);
+    $deployer = new ContentaDeployer($job_id, $start_step, $single_step, $ai_model, $mode);
     $deployer->deploy();
     
 } catch (Exception $e) {

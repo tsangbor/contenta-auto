@@ -33,7 +33,7 @@ $site_title = $processed_data['confirmed_data']['website_name'] ?: $domain;
 $site_description = $processed_data['confirmed_data']['website_description'] ?: '由 Contenta AI 自動生成的網站';
 
 // Limited Admin 用戶資訊（後續步驟使用）
-$user_email = $processed_data['confirmed_data']['user_email']; // eric791206@gmail.com
+$user_email = $processed_data['confirmed_data']['user_email']; 
 
 $deployer->log("WordPress 安裝配置:");
 $deployer->log("  管理員帳號: {$admin_user}");

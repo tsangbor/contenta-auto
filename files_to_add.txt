@@ -1,0 +1,4 @@
+step-16.php
+test-step16-integration.php
+test-step16-logo-generation.php
+test-step16-simplified.php
