@@ -21,20 +21,57 @@ class WP_CLI_Executor
     private $server_host;
     private $ssh_port;
     private $ssh_key_path;
+    private $ssh_password;
+    private $is_luke_mode;
     
     /**
      * 建構函數
      * 
      * @param object $config 配置物件
+     * @param bool $luke_mode 是否為 Luke 模式
      */
-    public function __construct($config)
+    public function __construct($config, $luke_mode = false)
     {
         $this->config = $config;
         $this->document_root = '';
-        $this->ssh_user = $config->get('deployment.ssh_user');
-        $this->server_host = $config->get('deployment.server_host');
-        $this->ssh_port = $config->get('deployment.ssh_port') ?: 22;
-        $this->ssh_key_path = $config->get('deployment.ssh_key_path');
+        $this->is_luke_mode = $luke_mode;
+        
+        if ($luke_mode) {
+            // Luke 模式設定：從 luke_deployment 配置讀取
+            $luke_config = $config->get('luke_deployment');
+            if (!$luke_config) {
+                throw new Exception("Luke API 設定不存在，請檢查 config/deploy-config.json 中的 luke_deployment 區塊");
+            }
+            
+            $this->ssh_user = $luke_config['ssh_user'];
+            $this->server_host = $luke_config['ssh_host'];
+            $this->ssh_port = $luke_config['ssh_port'] ?? 22;
+            $this->ssh_password = $luke_config['ssh_password'] ?? null;
+            
+            // SSH key 路徑處理 - 優先使用金鑰，密碼作為備用方案
+            $this->ssh_key_path = '';
+            $default_keys = ['~/.ssh/id_rsa'];
+            
+            // 首先嘗試設定 SSH 金鑰
+            if (!empty($luke_config['ssh_key_path'])) {
+                $this->ssh_key_path = str_replace('~', $_SERVER['HOME'], $luke_config['ssh_key_path']);
+            } else {
+                // 嘗試使用預設的 SSH key
+                foreach ($default_keys as $key) {
+                    $expanded_key = str_replace('~', $_SERVER['HOME'], $key);
+                    if (file_exists($expanded_key)) {
+                        $this->ssh_key_path = $expanded_key;
+                        break;
+                    }
+                }
+            }
+        } else {
+            // BT Panel 模式設定
+            $this->ssh_user = $config->get('deployment.ssh_user');
+            $this->server_host = $config->get('deployment.server_host');
+            $this->ssh_port = $config->get('deployment.ssh_port') ?: 22;
+            $this->ssh_key_path = $config->get('deployment.ssh_key_path');
+        }
     }
     
     /**
@@ -89,8 +126,20 @@ class WP_CLI_Executor
             ];
         }
         
-        // 首先將檔案上傳到遠端伺服器的臨時目錄
-        $remote_temp_path = "/tmp/" . basename($local_file_path);
+        // 首先將檔案上傳到 WordPress uploads 臨時目錄
+        $temp_dir = $this->document_root . "/wp-content/uploads/temp";
+        $remote_temp_path = $temp_dir . "/" . basename($local_file_path);
+        
+        // 確保臨時目錄存在
+        $mkdir_result = $this->execute_ssh("mkdir -p " . escapeshellarg($temp_dir));
+        if ($mkdir_result['return_code'] !== 0) {
+            return [
+                'return_code' => 1,
+                'error' => "無法創建臨時目錄: " . $mkdir_result['output'],
+                'attachment_id' => null
+            ];
+        }
+        
         $scp_result = $this->scp_upload($local_file_path, $remote_temp_path);
         
         if ($scp_result['return_code'] !== 0) {
@@ -121,7 +170,7 @@ class WP_CLI_Executor
         $result = $this->execute($import_command, $options);
         
         // 清理遠端臨時檔案
-        $this->execute_ssh("rm -f {$remote_temp_path}");
+        $this->execute_ssh("rm -f " . escapeshellarg($remote_temp_path));
         
         if ($result['return_code'] === 0) {
             // --porcelain 參數會讓 wp media import 只輸出 attachment ID
@@ -269,6 +318,12 @@ class WP_CLI_Executor
      */
     private function scp_upload($local_path, $remote_path)
     {
+        // 優先使用 SSH 金鑰認證，如果沒有金鑰則使用密碼
+        if ($this->is_luke_mode && empty($this->ssh_key_path) && !empty($this->ssh_password)) {
+            return $this->scp_upload_with_password($local_path, $remote_path);
+        }
+        
+        // 使用 SSH 金鑰認證（預設方式）
         $scp_cmd = "scp";
         
         if (!empty($this->ssh_key_path) && file_exists($this->ssh_key_path)) {
@@ -280,6 +335,13 @@ class WP_CLI_Executor
         }
         
         $scp_cmd .= " -o StrictHostKeyChecking=no";
+        
+        // Luke 模式額外的 SCP 設定
+        if ($this->is_luke_mode) {
+            $scp_cmd .= " -o UserKnownHostsFile=/dev/null";
+            $scp_cmd .= " -o LogLevel=ERROR";
+        }
+        
         $scp_cmd .= " " . escapeshellarg($local_path);
         $scp_cmd .= " {$this->ssh_user}@{$this->server_host}:" . escapeshellarg($remote_path);
         
@@ -287,6 +349,47 @@ class WP_CLI_Executor
         $return_code = 0;
         
         exec($scp_cmd . ' 2>&1', $output, $return_code);
+        
+        // Luke 模式過濾 SSH 警告訊息
+        if ($this->is_luke_mode) {
+            $output = $this->filter_ssh_warnings($output);
+        }
+        
+        return [
+            'return_code' => $return_code,
+            'output' => implode("\n", $output),
+            'command' => $scp_cmd
+        ];
+    }
+    
+    /**
+     * 使用密碼上傳檔案 (Luke 模式專用)
+     * 
+     * @param string $local_path 本地路徑
+     * @param string $remote_path 遠端路徑
+     * @return array 執行結果
+     */
+    private function scp_upload_with_password($local_path, $remote_path)
+    {
+        $scp_cmd = "sshpass -p " . escapeshellarg($this->ssh_password) . " scp";
+        
+        if (!empty($this->ssh_port)) {
+            $scp_cmd .= " -P {$this->ssh_port}";
+        }
+        
+        $scp_cmd .= " -o StrictHostKeyChecking=no";
+        $scp_cmd .= " -o UserKnownHostsFile=/dev/null";
+        $scp_cmd .= " -o LogLevel=ERROR";
+        $scp_cmd .= " " . escapeshellarg($local_path);
+        $scp_cmd .= " {$this->ssh_user}@{$this->server_host}:" . escapeshellarg($remote_path);
+        
+        $output = [];
+        $return_code = 0;
+        
+        exec($scp_cmd . ' 2>&1', $output, $return_code);
+        
+        // 過濾 SSH 警告訊息
+        $output = $this->filter_ssh_warnings($output);
         
         return [
             'return_code' => $return_code,
@@ -303,6 +406,12 @@ class WP_CLI_Executor
      */
     private function execute_ssh($command)
     {
+        // 優先使用 SSH 金鑰認證，如果沒有金鑰則使用密碼
+        if ($this->is_luke_mode && empty($this->ssh_key_path) && !empty($this->ssh_password)) {
+            return $this->execute_ssh_with_password($command);
+        }
+        
+        // 使用 SSH 金鑰認證（預設方式）
         $ssh_cmd = "ssh";
         
         if (!empty($this->ssh_key_path) && file_exists($this->ssh_key_path)) {
@@ -314,6 +423,13 @@ class WP_CLI_Executor
         }
         
         $ssh_cmd .= " -o StrictHostKeyChecking=no";
+        
+        // Luke 模式額外的 SSH 設定
+        if ($this->is_luke_mode) {
+            $ssh_cmd .= " -o UserKnownHostsFile=/dev/null";
+            $ssh_cmd .= " -o LogLevel=ERROR";
+        }
+        
         $ssh_cmd .= " {$this->ssh_user}@{$this->server_host}";
         $ssh_cmd .= " " . escapeshellarg($command);
         
@@ -322,11 +438,86 @@ class WP_CLI_Executor
         
         exec($ssh_cmd . ' 2>&1', $output, $return_code);
         
+        // Luke 模式過濾 SSH 警告訊息
+        if ($this->is_luke_mode) {
+            $output = $this->filter_ssh_warnings($output);
+        }
+        
         return [
             'return_code' => $return_code,
             'output' => implode("\n", $output),
             'command' => $command
         ];
+    }
+    
+    /**
+     * 使用密碼執行 SSH 命令 (Luke 模式專用)
+     * 
+     * @param string $command 要執行的命令
+     * @return array 執行結果
+     */
+    private function execute_ssh_with_password($command)
+    {
+        $ssh_cmd = "sshpass -p " . escapeshellarg($this->ssh_password) . " ssh";
+        
+        if (!empty($this->ssh_port)) {
+            $ssh_cmd .= " -p {$this->ssh_port}";
+        }
+        
+        $ssh_cmd .= " -o StrictHostKeyChecking=no";
+        $ssh_cmd .= " -o UserKnownHostsFile=/dev/null";
+        $ssh_cmd .= " -o LogLevel=ERROR";
+        $ssh_cmd .= " {$this->ssh_user}@{$this->server_host}";
+        $ssh_cmd .= " " . escapeshellarg($command);
+        
+        $output = [];
+        $return_code = 0;
+        
+        exec($ssh_cmd . ' 2>&1', $output, $return_code);
+        
+        // 過濾 SSH 警告訊息
+        $output = $this->filter_ssh_warnings($output);
+        
+        return [
+            'return_code' => $return_code,
+            'output' => implode("\n", $output),
+            'command' => $command
+        ];
+    }
+    
+    /**
+     * 過濾 SSH 警告訊息 (Luke 模式專用)
+     * 
+     * @param array $output 原始輸出
+     * @return array 過濾後的輸出
+     */
+    private function filter_ssh_warnings($output)
+    {
+        $filtered = [];
+        $warning_patterns = [
+            '/Warning: Permanently added/',
+            '/Could not create directory/',
+            '/Failed to add the host to the list of known hosts/',
+            '/Host key verification failed/',
+            '/Connection refused/',
+            '/Permission denied \(publickey\)/'
+        ];
+        
+        foreach ($output as $line) {
+            $is_warning = false;
+            foreach ($warning_patterns as $pattern) {
+                if (preg_match($pattern, $line)) {
+                    $is_warning = true;
+                    break;
+                }
+            }
+            
+            if (!$is_warning) {
+                $filtered[] = $line;
+            }
+        }
+        
+        return $filtered;
     }
     
     /**

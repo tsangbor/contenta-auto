@@ -247,7 +247,7 @@ class ContentaDeployer
         try {
             // --- 智慧路徑選擇邏輯 ---
             // 1. 定義哪些步驟是有模式差異的
-            $mode_specific_steps = ['00', '03', '04', '05', '06', '07'];
+            $mode_specific_steps = ['00', '01', '02', '03', '04', '05', '06', '07', '11', '13', '14', '15', '16', '17', '18'];
             
             // 2. 預設的腳本路徑
             $script_file = DEPLOY_BASE_PATH . "/step-{$step_num}.php";
