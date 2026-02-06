@@ -1,13 +1,16 @@
 <?php
 /**
  * 步驟 09: 頁面組裝與 AI 文案填充 (重構版)
- * 
+ *
  * 流程：
  * 1. 根據 site-config.json 中的 layout_selection，將 template/container 的 JSON 檔案合併成完整的頁面骨架
  * 2. 合併完成後，針對每個合成頁面進行{{}}的篩選，生成text-mapping.json
  * 3. 篩選出來的text-mapping.json 跟 site-config.json 傳給AI模型進行文案填充
  * 4. 根據AI填充後的text-mapping.json更換頁面內容，並儲存為 *-ai.json
  */
+
+// 載入 OpenAI 輔助類別
+require_once DEPLOY_BASE_PATH . '/includes/utilities/class-openai-helper.php';
 
 // 確保工作目錄存在
 $work_dir = DEPLOY_BASE_PATH . '/temp/' . $job_id;
@@ -288,24 +291,28 @@ function callOpenAI($prompt, $openai_config, $deployer) {
     $api_key = $openai_config['api_key'] ?? '';
     $model = $openai_config['model'] ?? 'gpt-4o-mini';
     $base_url = $openai_config['base_url'] ?? 'https://api.openai.com/v1/';
-    
+
     if (empty($api_key)) {
         throw new Exception("OpenAI API 金鑰未設定");
     }
-    
-    $deployer->log("使用模型: {$model}");
-    
-    $data = [
-        'model' => $model,
-        'messages' => [
+
+    $token_param = OpenAIHelper::getTokenLimitParamName($model);
+    $deployer->log("使用模型: {$model} (使用 {$token_param})");
+
+    // 使用 OpenAIHelper 建構請求資料（自動處理新舊模型差異）
+    $data = OpenAIHelper::buildRequestData(
+        $model,
+        [
             [
                 'role' => 'user',
                 'content' => $prompt
             ]
         ],
-        'temperature' => 0.7,
-        'max_tokens' => 16000
-    ];
+        [
+            'max_tokens' => 16000,
+            'temperature' => 0.7
+        ]
+    );
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $base_url . 'chat/completions');

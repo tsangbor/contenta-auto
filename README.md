@@ -235,6 +235,98 @@ tail -f logs/deploy-2025-06-30.log
 3. **權限控制**: 確保檔案權限設定正確
 4. **網路安全**: 建議在 VPN 環境下執行
 
+## 已知問題與解決方案
+
+### 🐛 OpenAI API 兼容性問題 (已修復)
+
+**問題描述**: 使用 GPT-5 或 GPT-4.1 系列模型時出現參數錯誤
+
+#### 錯誤 1: max_tokens 參數不支援
+```
+Unsupported parameter: 'max_tokens' is not supported with this model.
+Use 'max_completion_tokens' instead.
+```
+
+**影響範圍**:
+- GPT-5 系列 (gpt-5, gpt-5-mini, gpt-5-nano)
+- GPT-4.1 系列 (gpt-4.1, gpt-4.1-mini, gpt-4.1-nano)
+- o3/o4 推理模型系列
+
+#### 錯誤 2: temperature 參數限制
+```
+Unsupported value: 'temperature' does not support 0.7 with this model.
+Only the default (1) value is supported.
+```
+
+**影響範圍**:
+- 整個 GPT-5 系列
+- 整個 GPT-4.1 系列
+- o1/o3/o4 推理模型系列
+
+**解決方案**:
+系統已內建 `OpenAIHelper` 類別，自動偵測模型類型並使用正確參數：
+- 新模型自動使用 `max_completion_tokens`
+- 舊模型維持使用 `max_tokens`
+- 不支援自訂 temperature 的模型將使用預設值
+
+**修改檔案**:
+- `includes/utilities/class-openai-helper.php` (新增)
+- `step-08.php`, `step-09.php`, `step-09-5.php`, `step-10.php`, `step-15.php`
+- `includes/class-content-resolver.php`
+- `includes/workflows/process-articles.php`
+
+**更多資訊**: 詳見 [OPENAI-API-FIX.md](OPENAI-API-FIX.md)
+
+---
+
+### 🐛 SSHHelper 類別載入錯誤 (已修復)
+
+**問題描述**: 執行 step-17-luke.php 時出現類別未找到錯誤
+
+```
+Fatal error: Class "SSHHelper" not found in step-17-luke.php:420
+```
+
+**原因**: `require_once` 語句被放置在 PHPDoc 註釋區塊內，導致 PHP 將其視為註釋而非可執行代碼
+
+**解決方案**: 將 `require_once` 語句移出註釋區塊至正確位置
+
+**影響範圍**: step-17-luke.php (Luke API 部署模式)
+
+**版本**: 已在 v1.15.1 修復
+
+---
+
+### ℹ️ 模型選擇建議 (2026-01-31 更新)
+
+使用 OpenAI 服務時，建議根據需求選擇適合的模型：
+
+#### 成本優先
+```json
+"model": "gpt-5-nano"
+```
+- **定價**: $0.05/$0.40 per 1M tokens
+- **適合**: 大量內容生成、成本敏感專案
+- **節省**: 比 gpt-4o-mini 節省 67% 成本
+
+#### 平衡方案
+```json
+"model": "gpt-4.1-nano"
+```
+- **定價**: $0.10/$0.40 per 1M tokens
+- **適合**: 一般業務應用
+- **特色**: 性價比最佳
+
+#### 品質優先
+```json
+"model": "gpt-4o"
+```
+- **定價**: $2.50/$10.00 per 1M tokens
+- **適合**: 高品質輸出需求
+- **特色**: 最佳輸出品質
+
+**注意**: 所有 OpenAI 模型都已自動兼容，無需額外配置。
+
 ## 故障排除
 
 ### 常見問題

@@ -1,13 +1,17 @@
 <?php
 /**
  * 多層次內容解析器 (Multi-layered Content Resolver)
- * 
+ *
  * 按照優先級順序解析佔位符內容：
  * 1. 精確映射 (Exact Match)
- * 2. 智能模式匹配 (Intelligent Pattern Matching) 
+ * 2. 智能模式匹配 (Intelligent Pattern Matching)
  * 3. AI 上下文生成 (AI Contextual Generation)
  * 4. 通用備用值 (Generic Fallback)
  */
+
+// 載入 OpenAI 輔助類別
+require_once __DIR__ . '/utilities/class-openai-helper.php';
+
 class ContentResolver {
     
     private $deployer;
@@ -352,21 +356,25 @@ class ContentResolver {
         }
         
         $url = 'https://api.openai.com/v1/chat/completions';
-        
-        $data = [
-            'model' => 'gpt-3.5-turbo',  // 快速且便宜的模型
-            'messages' => [
+        $model = 'gpt-3.5-turbo';  // 快速且便宜的模型
+
+        // 使用 OpenAIHelper 建構請求資料（自動處理新舊模型差異）
+        $data = OpenAIHelper::buildRequestData(
+            $model,
+            [
                 [
                     'role' => 'user',
                     'content' => $prompt
                 ]
             ],
-            'max_tokens' => 100,  // 限制短文本
-            'temperature' => 0.7,
-            'top_p' => 1,
-            'frequency_penalty' => 0,
-            'presence_penalty' => 0
-        ];
+            [
+                'max_tokens' => 100,  // 限制短文本
+                'temperature' => 0.7,
+                'top_p' => 1,
+                'frequency_penalty' => 0,
+                'presence_penalty' => 0
+            ]
+        );
         
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_URL, $url);

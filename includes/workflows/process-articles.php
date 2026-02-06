@@ -1,7 +1,7 @@
 <?php
 /**
  * 共用的文章生成與圖片處理工作流程 (基於原始 step-15.php v1.1)
- * 
+ *
  * 此檔案包含文章生成的完整邏輯，被 step-15.php 和 step-15-luke.php 共用
  * 使用全域變數進行參數傳遞：
  * - $wp_cli: WP_CLI_Executor 實例
@@ -9,14 +9,17 @@
  * - $work_dir: 工作目錄
  * - $config: 配置管理器
  * - $job_id: Job ID
- * 
+ *
  * 核心職責：以循環方式遍歷 article-prompts.json 中定義的所有文章策略，
  * 並為每一條策略生成一篇完整、高品質的 WordPress 文章，
  * 同時為其生成、上傳和設定一張與文章內容高度相關的精選圖片。
- * 
+ *
  * @package Contenta
  * @version 2.0 (整合 Gemini API 支援，基於原始 step-15.php)
  */
+
+// 載入 OpenAI 輔助類別
+require_once __DIR__ . '/../utilities/class-openai-helper.php';
 
 // 確保必要的變數已定義
 if (!isset($wp_cli) || !isset($deployer) || !isset($work_dir) || !isset($config)) {
@@ -90,6 +93,59 @@ if (file_exists($site_config_file)) {
     $site_config = [];
 }
 
+// 如果 site-config.json 中沒有分類，嘗試從 article-prompts.json 提取
+if (empty($site_config['categories'])) {
+    $article_prompts_file = $work_dir . '/json/article-prompts.json';
+    if (file_exists($article_prompts_file)) {
+        $deployer->log("從 article-prompts.json 提取分類資訊...");
+        $article_prompts = json_decode(file_get_contents($article_prompts_file), true);
+        
+        if (is_array($article_prompts)) {
+            $categories_from_prompts = [];
+            
+            foreach ($article_prompts as $prompt) {
+                if (isset($prompt['category']) && !empty($prompt['category'])) {
+                    $category_name = $prompt['category'];
+                    $category_slug = sanitize_title($category_name);
+                    
+                    // 避免重複分類
+                    if (!isset($categories_from_prompts[$category_slug])) {
+                        $categories_from_prompts[$category_slug] = [
+                            'name' => $category_name,
+                            'slug' => $category_slug,
+                            'description' => "關於{$category_name}的相關文章"
+                        ];
+                    }
+                }
+            }
+            
+            if (!empty($categories_from_prompts)) {
+                $deployer->log("檢查並建立從文章提示詞提取的分類...");
+                
+                foreach ($categories_from_prompts as $category) {
+                    $name = $category['name'];
+                    $slug = $category['slug'];
+                    $description = $category['description'];
+                    
+                    // 檢查分類是否已存在
+                    if ($wp_cli->category_exists($slug)) {
+                        $deployer->log("  分類 '{$name}' (slug: {$slug}) 已存在");
+                    } else {
+                        // 建立新分類
+                        $create_result = $wp_cli->create_category($name, $slug, $description);
+                        
+                        if ($create_result['return_code'] === 0) {
+                            $deployer->log("  建立分類 '{$name}' (slug: {$slug}) 成功，ID: {$create_result['term_id']}");
+                        } else {
+                            $deployer->log("  建立分類 '{$name}' 失敗: " . $create_result['output']);
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // 取得 API 配置
 $openai_api_key = $config->get('api_credentials.openai.api_key');
 $google_api_key = $config->get('api_credentials.gemini.api_key');
@@ -149,22 +205,25 @@ function clean_ai_content($content) {
  */
 function call_openai_api($prompt, $model = 'gpt-4o-mini', $max_tokens = 2000, $api_key = null) {
     global $deployer;
-    
+
     if ($api_key === null) {
         global $openai_api_key;
         $api_key = $openai_api_key;
     }
-    
+
     $url = 'https://api.openai.com/v1/chat/completions';
-    
-    $data = [
-        'model' => $model,
-        'messages' => [
+
+    // 使用 OpenAIHelper 建構請求資料（自動處理新舊模型差異）
+    $data = OpenAIHelper::buildRequestData(
+        $model,
+        [
             ['role' => 'user', 'content' => $prompt]
         ],
-        'max_tokens' => $max_tokens,
-        'temperature' => 0.7
-    ];
+        [
+            'max_tokens' => $max_tokens,
+            'temperature' => 0.7
+        ]
+    );
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);

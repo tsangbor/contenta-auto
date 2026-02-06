@@ -4,6 +4,131 @@
 
 ## 最新更改
 
+### [1.15.1] - 2026-01-31
+
+#### 🐛 Fixed（Bug 修復）
+
+##### **修復 step-17-luke.php SSHHelper 類別載入錯誤**
+- **錯誤訊息**：`Fatal error: Class "SSHHelper" not found in step-17-luke.php:420`
+- **問題原因**：
+  - `require_once` 語句（第 33 行）被放在 PHPDoc 多行註釋區塊內
+  - PHP 解析器將其視為註釋文字，未實際執行
+  - SSHHelper 類別從未被載入
+  - 執行到第 420 行時調用 `SSHHelper::detectSSHKey()` 失敗
+- **修復方式**：
+  - 將 PHPDoc 註釋在第 50 行正確結束（添加 `*/`）
+  - 將 `require_once` 語句移到第 52-53 行（註釋區塊外）
+  - 確保類別在使用前被正確載入
+- **影響範圍**：
+  - step-17-luke.php（Luke API 模式最終配置）
+  - 修改行數：第 30-53 行
+- **相關文檔**：無
+
+---
+
+#### 🔧 Changed（功能變更）
+
+##### **OpenAI API 參數兼容性全面改進**
+
+**背景**：OpenAI 在 GPT-5 和 GPT-4.1 系列引入了 API 參數變更，導致使用舊參數的代碼無法運行。
+
+**問題 1：max_tokens 參數棄用**
+- **錯誤訊息**：`Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.`
+- **影響模型**：
+  - GPT-5 系列（gpt-5, gpt-5-mini, gpt-5-nano）
+  - GPT-4.1 系列（gpt-4.1, gpt-4.1-mini, gpt-4.1-nano）
+  - o3/o4 推理模型系列
+- **解決方案**：
+  - 新模型使用 `max_completion_tokens`
+  - 舊模型繼續使用 `max_tokens`
+  - 自動判斷並選擇正確參數
+
+**問題 2：temperature 參數限制**
+- **錯誤訊息**：`Unsupported value: 'temperature' does not support 0.7 with this model. Only the default (1) value is supported.`
+- **影響模型**：
+  - 整個 GPT-5 系列
+  - 整個 GPT-4.1 系列
+  - o1/o3/o4 推理模型系列
+- **解決方案**：
+  - 這些模型只支援 `temperature = 1`（預設值）
+  - 自動判斷是否支援自訂 temperature
+  - 不支援的模型省略該參數
+
+**新增檔案**：
+- `includes/utilities/class-openai-helper.php` - OpenAI API 輔助類別
+  - `isNewGenerationModel()` - 判斷是否為新一代模型
+  - `supportsCustomTemperature()` - 判斷是否支援自訂 temperature
+  - `buildRequestData()` - 建構兼容的 API 請求資料
+  - `getTokenLimitParamName()` - 取得 token 參數名稱
+  - `getModelFamily()` - 取得模型系列名稱
+
+**修改檔案**（7 個）：
+| 檔案 | max_tokens 值 | 修改位置 | 用途 |
+|------|--------------|---------|------|
+| step-08.php | 16000 | 行 11, 815-827 | AI 生成網站配置 JSON |
+| step-09.php | 16000 | 行 13, 296-308 | AI 文案填充 |
+| step-09-5.php | 3000 | 行 12, 968-975 | 圖片提示詞生成 |
+| step-10.php | 4096 | 行 8, 1279-1286 | 圖片生成 |
+| step-15.php | 2000 | 行 24-52, 197-204 | 文章生成 |
+| includes/class-content-resolver.php | 100 | 行 12, 354-369 | 內容解析 |
+| includes/workflows/process-articles.php | 2000 | 行 21, 213-220 | 文章工作流程 |
+
+**修改範例**：
+```php
+// 修改前（會出錯）
+$data = [
+    'model' => 'gpt-5-nano',
+    'messages' => [...],
+    'max_tokens' => 16000,      // ❌ 新模型不支援
+    'temperature' => 0.7         // ❌ 新模型不支援
+];
+
+// 修改後（自動兼容）
+$data = OpenAIHelper::buildRequestData(
+    'gpt-5-nano',
+    [...],
+    [
+        'max_tokens' => 16000,
+        'temperature' => 0.7
+    ]
+);
+// 自動產生：
+// {
+//     "model": "gpt-5-nano",
+//     "messages": [...],
+//     "max_completion_tokens": 16000  // ✅ 自動使用正確參數
+//     // temperature 被省略（使用預設值 1）
+// }
+```
+
+**兼容性**：
+- ✅ 新模型（GPT-5, GPT-4.1, o3, o4）：自動使用新參數
+- ✅ 舊模型（GPT-4o, GPT-4, GPT-3.5）：繼續使用舊參數
+- ✅ 向後兼容：現有代碼無需修改
+
+**相關文檔**：
+- `OPENAI-API-FIX.md` - 詳細的修復說明文檔
+
+---
+
+#### 📚 Documentation（文檔更新）
+
+##### **新增文檔維護流程指南**
+- **新增檔案**：`CONTRIBUTING.md`
+- **內容**：
+  - CHANGELOG 維護規範（語義化版本、變更類型分類）
+  - 修改工作流程（何時更新 README、何時更新 CHANGELOG）
+  - 文檔品質檢查清單
+  - 文檔撰寫最佳實踐
+  - 定期維護建議
+- **目的**：規範化文檔管理流程，確保所有功能調整都被正確記錄
+
+##### **新增功能專門文檔**
+- **DNS-CHECK-FEATURE.md**：DNS 解析檢查功能完整說明
+- **OPENAI-API-FIX.md**：OpenAI API 參數兼容性修復詳解
+
+---
+
 ### [1.14.24] - 2025-07-04 23:00
 
 #### 🎨 Step-10 完全重構：圖片佔位符識別與 AI 圖片生成統一流程

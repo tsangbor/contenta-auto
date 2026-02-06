@@ -1,26 +1,26 @@
 <?php
 /**
  * 步驟 17: 最終配置與設定 (Luke API 模式)
- * 
+ *
  * 核心職責：完成網站的最終配置設定，包括用戶資料更新、系統設定優化和權限配置
- * 
+ *
  * 詳細執行工作流：
  * 1. 【管理員資料更新】
  *    - 根據品牌資訊動態生成管理員自我介紹
  *    - 更新管理員用戶的 description 欄位
  *    - 整合網站名稱、品牌個性、獨特價值和服務項目
- * 
+ *
  * 2. 【系統配置優化】
  *    - 設定時區為 Asia/Taipei
  *    - 設定日期格式為 'Y年n月j日'
  *    - 設定時間格式為 'H:i'
- *    
+ *
  * 3. 【分類選單建立】
  *    - 建立名為 "category" 的新選單
  *    - 自動取得所有文章分類（排除「未分類」）
  *    - 將有效分類項目加入到 category 選單
  *    - 指派選單到頁尾位置（footer 或 secondary）
- *    
+ *
  * 4. 【Elementor 效能優化】
  *    - 設定 CSS 輸出方式為外部檔案（提升載入速度）
  *    - 關閉圖片最佳化載入（避免衝突）
@@ -28,26 +28,29 @@
  *    - 關閉背景圖片延遲載入（確保視覺效果）
  *    - 停用元素快取（避免更新問題）
  *    - 清除 Elementor CSS 快取（確保樣式生效）
- * 
+ *
  * 5. 【檔案權限設定】
  *    - 設定 wp-content 目錄權限為 755
  *    - 設定 wp-content/uploads 目錄權限為 755
  *    - 確保檔案上傳和媒體庫正常運作
- * 
+ *
  * 6. 【最終系統檢查】
  *    - 檢查 WordPress 版本和狀態
  *    - 檢查啟用的主題和外掛
  *    - 統計已發布的文章和頁面數量
  *    - 驗證網站基本功能運作正常
- * 
+ *
  * 輸出結果：
  * - 生成 step-17-result.json 記錄所有設定結果
  * - 包含各項配置的成功/失敗狀態
  * - 提供完整的執行時間戳記
- * 
+ *
  * @package Contenta
  * @version 1.0
  */
+
+// 載入 SSH 輔助工具
+require_once DEPLOY_BASE_PATH . '/includes/utilities/class-ssh-helper.php';
 /**
  * 步驟 17: 最終配置與設定 (Luke API 模式)
  * 
@@ -105,6 +108,63 @@
  * @package Contenta
  * @version 3.0 (Luke Mode with unified executor)
  */
+
+/**
+ * 執行 SSH 指令
+ */
+function executeSSH($host, $user, $port, $key_path, $command, $max_retries = 3)
+{
+    $ssh_cmd = "ssh";
+    
+    if (!empty($key_path) && file_exists($key_path)) {
+        $ssh_cmd .= " -i " . escapeshellarg($key_path);
+    }
+    
+    if (!empty($port)) {
+        $ssh_cmd .= " -p {$port}";
+    }
+    
+    // 增加連線選項以提高穩定性
+    $ssh_cmd .= " -o StrictHostKeyChecking=no";
+    $ssh_cmd .= " -o ConnectTimeout=30";
+    $ssh_cmd .= " -o ServerAliveInterval=60";
+    $ssh_cmd .= " -o ServerAliveCountMax=3";
+    $ssh_cmd .= " {$user}@{$host}";
+    $ssh_cmd .= " " . escapeshellarg($command);
+    
+    $last_error = '';
+    
+    for ($retry = 0; $retry < $max_retries; $retry++) {
+        if ($retry > 0) {
+            error_log("SSH 重試第 {$retry} 次: {$command}");
+            sleep(2 + $retry); // 漸進式延遲
+        }
+        
+        $output = [];
+        $return_code = 0;
+        
+        exec($ssh_cmd . ' 2>&1', $output, $return_code);
+        $output_str = implode("\n", $output);
+        
+        // 檢查是否為連線錯誤
+        if ($return_code === 0 || !preg_match('/connection|closed|timeout/i', $output_str)) {
+            return [
+                'return_code' => $return_code,
+                'output' => $output_str,
+                'command' => $command
+            ];
+        }
+        
+        $last_error = $output_str;
+    }
+    
+    // 所有重試都失敗
+    return [
+        'return_code' => 255,
+        'output' => "SSH 連線失敗 (已重試 {$max_retries} 次): {$last_error}",
+        'command' => $command
+    ];
+}
 
 // 載入處理後的資料
 $work_dir = DEPLOY_BASE_PATH . '/temp/' . $job_id;
@@ -347,34 +407,172 @@ try {
         $step_result['tasks']['elementor_optimization'] = ['status' => 'error', 'error' => $e->getMessage()];
     }
     
+    // ========== 4.5. wp-config.php 進階優化 ==========
+    $deployer->log("⚙️ 4.5. 加入 Elementor 進階優化設定到 wp-config.php");
+    
+    try {
+        $luke_config = $config->get('luke_deployment');
+        $server_host = $luke_config['ssh_host'];
+        $ssh_user = $luke_config['ssh_user'];
+        $ssh_port = $luke_config['ssh_port'] ?? 22;
+
+        // 使用 SSHHelper 自動偵測 SSH key
+        $ssh_key_info = SSHHelper::detectSSHKey($luke_config['ssh_key_path'] ?? null);
+        $ssh_key_path = $ssh_key_info['path'];
+
+        // 檢查是否已存在優化設定
+        $check_cmd = "cd {$document_root} && grep -q 'Elementor 進階優化' wp-config.php";
+        $check_result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path, $check_cmd);
+        
+        if ($check_result['return_code'] !== 0) {
+            // 優化設定不存在，開始加入
+            $deployer->log("正在加入 Elementor 優化設定...");
+            
+            // 使用安全的 PHP 方式加入優化設定
+            $safe_add_cmd = 'cd ' . $document_root . ' && php -r \'
+$config_file = "wp-config.php";
+$config_content = file_get_contents($config_file);
+
+// 準備要加入的優化設定
+$optimization = "
+// Elementor 進階優化（適合複雜頁面）
+ini_set(\"max_execution_time\", 300);      // 10分鐘（編輯大型頁面時）
+ini_set(\"memory_limit\", \"512M\");        // 512MB（處理大型頁面）
+ini_set(\"max_input_vars\", 5000);         // 5000個變數
+";
+
+// 檢查是否已存在
+if (strpos($config_content, "Elementor 進階優化") === false) {
+    // 在第一個 <?php 標籤後加入優化設定
+    $config_content = preg_replace("/(<\?php)/", "$1" . $optimization, $config_content, 1);
+    file_put_contents($config_file, $config_content);
+    echo "Added successfully";
+} else {
+    echo "Already exists";
+}\'';
+            
+            $config_result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path, $safe_add_cmd);
+            
+            if ($config_result['return_code'] === 0) {
+                if (strpos($config_result['output'], 'Added successfully') !== false) {
+                    $deployer->log("✅ Elementor 進階優化設定已成功加入 wp-config.php");
+                    $step_result['tasks']['wp_config_optimization'] = ['status' => 'success'];
+                } else {
+                    $deployer->log("✓ Elementor 優化設定已存在");
+                    $step_result['tasks']['wp_config_optimization'] = ['status' => 'exists'];
+                }
+            } else {
+                $deployer->log("❌ 加入優化設定失敗: " . $config_result['output']);
+                $step_result['tasks']['wp_config_optimization'] = ['status' => 'failed', 'error' => $config_result['output']];
+            }
+        } else {
+            $deployer->log("✓ Elementor 優化設定已存在，跳過加入");
+            $step_result['tasks']['wp_config_optimization'] = ['status' => 'exists'];
+        }
+    } catch (Exception $e) {
+        $deployer->log("❌ wp-config.php 優化異常: " . $e->getMessage());
+        $step_result['tasks']['wp_config_optimization'] = ['status' => 'error', 'error' => $e->getMessage()];
+    }
+    
     // ========== 5. 檔案權限設定 ==========
     $deployer->log("🔐 5. 檔案權限設定");
     
     try {
-        // 使用 WP-CLI 的 eval 來設定權限
+        // 直接使用 SSH 命令設定檔案權限
+        $luke_config = $config->get('luke_deployment');
+
+        $server_host = $luke_config['ssh_host'];
+        $ssh_user = $luke_config['ssh_user'];
+        $ssh_port = $luke_config['ssh_port'] ?? 22;
+
+        // 使用 SSHHelper 自動偵測 SSH key
+        $ssh_key_info = SSHHelper::detectSSHKey($luke_config['ssh_key_path'] ?? null);
+        $ssh_key_path = $ssh_key_info['path'];
+
+        // 確保目錄存在並設定權限
         $chmod_commands = [
-            "chmod({$document_root}/wp-content, 0755)",
-            "chmod({$document_root}/wp-content/uploads, 0755)"
+            "chmod 755 {$document_root}/wp-content",
+            "chmod 755 {$document_root}/wp-content/uploads",
+            "chown -R {$domain}:www-data {$document_root}/wp-content"
         ];
         
         $permission_success = 0;
         foreach ($chmod_commands as $cmd) {
-            $result = $wp_cli->execute("eval \"{$cmd};\"");
-            if ($result['return_code'] === 0) {
+            $result = executeSSH($server_host, $ssh_user, $ssh_port, $ssh_key_path, $cmd);
+            if ($result['return_code'] === 0 || strpos($result['output'], 'No such file') === false) {
                 $permission_success++;
             }
         }
         
-        if ($permission_success >= 1) {
-            $deployer->log("✅ 檔案權限設定完成 ({$permission_success}/2)");
+        if ($permission_success >= 2) {
+            $deployer->log("✅ 檔案權限設定完成 ({$permission_success}/3)");
             $step_result['tasks']['file_permissions'] = ['status' => 'success'];
         } else {
-            $deployer->log("⚠ 檔案權限設定失敗");
-            $step_result['tasks']['file_permissions'] = ['status' => 'failed'];
+            $deployer->log("⚠ 檔案權限設定部分完成 ({$permission_success}/3)");
+            $step_result['tasks']['file_permissions'] = ['status' => 'partial'];
         }
     } catch (Exception $e) {
         $deployer->log("❌ 檔案權限設定異常: " . $e->getMessage());
         $step_result['tasks']['file_permissions'] = ['status' => 'error', 'error' => $e->getMessage()];
+    }
+    
+    // ========== 5.5. ShortPixel API 金鑰設定 ==========
+    $deployer->log("🖼️ 5.5. 設定 ShortPixel API 金鑰");
+    
+    try {
+        $shortpixel_api_key = $config->get('api_credentials.shortpixel.api_key') ?? '';
+        
+        // 調試信息
+        $deployer->log("調試: ShortPixel API Key 是否設定: " . (!empty($shortpixel_api_key) ? '是' : '否'));
+        $deployer->log("調試: api_key 長度: " . strlen($shortpixel_api_key));
+        
+        if (empty($shortpixel_api_key)) {
+            $deployer->log("⚠️ ShortPixel API 金鑰未設定，跳過配置");
+            $step_result['tasks']['shortpixel_api_key'] = ['status' => 'skipped', 'reason' => 'no_api_key'];
+        } else {
+            // 先檢查是否已經設定過金鑰
+            $check_result = $wp_cli->execute("db query \"SELECT * FROM wp_options WHERE option_value LIKE '%{$shortpixel_api_key}%';\"");
+            
+            if ($check_result['return_code'] === 0 && !empty(trim($check_result['output']))) {
+                $deployer->log("✅ ShortPixel API 金鑰已存在，跳過設定");
+                $step_result['tasks']['shortpixel_api_key'] = ['status' => 'exists'];
+            } else {
+                $deployer->log("設定 ShortPixel API 金鑰到資料庫...");
+                $shortpixel_result = $wp_cli->execute("eval \"
+                \\\$spio_key = array(
+                   'apiKey' => '{$shortpixel_api_key}',
+                   'verifiedKey' => true,
+                   'apiKeyTried' => null
+                );
+                \\\$update_result = update_option('spio_key', \\\$spio_key);
+                delete_option('ShortPixel-notices');
+                delete_option('wp-short-pixel-apiKey');
+                delete_option('wp-short-pixel-verifiedKey');
+                
+                \\\$saved_option = get_option('spio_key', null);
+                if (\\\$saved_option && isset(\\\$saved_option['apiKey'])) {
+                    echo 'ShortPixel API Key 設定成功，已保存: ' . \\\$saved_option['apiKey'];
+                } else {
+                    echo 'ShortPixel API Key 設定失敗，未找到保存的選項';
+                }
+                echo PHP_EOL . 'update_option 結果: ' . (\\\$update_result ? 'true' : 'false');
+                \"");
+                
+                $deployer->log("WP-CLI 執行結果: " . $shortpixel_result['output']);
+                
+                if ($shortpixel_result['return_code'] === 0 && 
+                    strpos($shortpixel_result['output'], 'ShortPixel API Key 設定成功') !== false) {
+                    $deployer->log("✅ ShortPixel API 金鑰設定完成");
+                    $step_result['tasks']['shortpixel_api_key'] = ['status' => 'success'];
+                } else {
+                    $deployer->log("❌ ShortPixel API 金鑰設定失敗");
+                    $step_result['tasks']['shortpixel_api_key'] = ['status' => 'failed', 'error' => $shortpixel_result['output']];
+                }
+            }
+        }
+    } catch (Exception $e) {
+        $deployer->log("❌ ShortPixel API 金鑰設定異常: " . $e->getMessage());
+        $step_result['tasks']['shortpixel_api_key'] = ['status' => 'error', 'error' => $e->getMessage()];
     }
     
     // ========== 6. 最終系統檢查 ==========

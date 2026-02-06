@@ -4,6 +4,9 @@
  * 掃描 *-ai.json 檔案中的圖片佔位符，生成 AI 圖片並建立 image-mapping.json
  */
 
+// 載入 OpenAI 輔助類別
+require_once DEPLOY_BASE_PATH . '/includes/utilities/class-openai-helper.php';
+
 // 載入處理後的資料
 $work_dir = DEPLOY_BASE_PATH . '/temp/' . $job_id;
 $processed_data = json_decode(file_get_contents($work_dir . '/config/processed_data.json'), true);
@@ -1275,15 +1278,19 @@ function callOpenAIAPI($prompt, $config, $deployer)
     $api_key = $config->get('api_credentials.openai.api_key');
     $base_url = $config->get('api_credentials.openai.base_url') ?: 'https://api.openai.com/v1/';
     $url = rtrim($base_url, '/') . '/chat/completions';
-    
-    $data = [
-        'model' => 'gpt-4o-mini',
-        'messages' => [
+    $model = 'gpt-4o-mini';
+
+    // 使用 OpenAIHelper 建構請求資料（自動處理新舊模型差異）
+    $data = OpenAIHelper::buildRequestData(
+        $model,
+        [
             ['role' => 'user', 'content' => $prompt]
         ],
-        'max_tokens' => 4096,
-        'temperature' => 0.1
-    ];
+        [
+            'max_tokens' => 4096,
+            'temperature' => 0.1
+        ]
+    );
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);

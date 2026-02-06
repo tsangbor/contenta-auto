@@ -4,9 +4,12 @@
  * 使用 AI 基於用戶資料生成兩個標準化的 JSON 配置檔案
  * - site-config.json: 網站基本配置與內容
  * - article-prompts.json: 文章內容模板
- * 
+ *
  * 注意: image-prompts.json 已移至步驟 9.5 動態生成
  */
+
+// 載入 OpenAI 輔助類別
+require_once DEPLOY_BASE_PATH . '/includes/utilities/class-openai-helper.php';
 
 // 確保工作目錄存在
 $work_dir = DEPLOY_BASE_PATH . '/temp/' . $job_id;
@@ -811,20 +814,24 @@ if (!function_exists('callOpenAI_step08')) {
 function callOpenAI_step08($ai_config, $prompt, $deployer)
 {
     $url = rtrim($ai_config['base_url'], '/') . '/chat/completions';
-    
-    $data = [
-        'model' => $ai_config['model'],
-        'messages' => [
+
+    // 使用 OpenAIHelper 建構請求資料（自動處理新舊模型差異）
+    $data = OpenAIHelper::buildRequestData(
+        $ai_config['model'],
+        [
             [
                 'role' => 'user',
                 'content' => $prompt
             ]
         ],
-        'max_tokens' => 16000, // 增加 token 限制以確保完整結構生成
-        'temperature' => 0.7
-    ];
-    
-    $deployer->log("呼叫 OpenAI API: " . $ai_config['model']);
+        [
+            'max_tokens' => 16000,  // 增加 token 限制以確保完整結構生成
+            'temperature' => 0.7
+        ]
+    );
+
+    $token_param = OpenAIHelper::getTokenLimitParamName($ai_config['model']);
+    $deployer->log("呼叫 OpenAI API: " . $ai_config['model'] . " (使用 {$token_param})");
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);

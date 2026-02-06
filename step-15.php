@@ -1,11 +1,11 @@
 <?php
 /**
  * 步驟 15: AI 文章與精選圖片生成 (v1.1)
- * 
+ *
  * 核心職責：以循環方式遍歷 article-prompts.json 中定義的所有文章策略，
  * 並為每一條策略生成一篇完整、高品質的 WordPress 文章，
  * 同時為其生成、上傳和設定一張與文章內容高度相關的精選圖片。
- * 
+ *
  * 執行工作流：
  * 1. 載入文章策略陣列
  * 2. 循環處理每個策略：
@@ -15,7 +15,7 @@
  *    15.4 上傳圖片並發布文章
  *    15.5 關聯精選圖片
  * 3. 錯誤容忍：單個失敗不中斷整體流程
- * 
+ *
  * @package Contenta
  * @version 1.1
  */
@@ -24,6 +24,7 @@
 $base_path = defined('DEPLOY_BASE_PATH') ? DEPLOY_BASE_PATH : __DIR__;
 $wp_cli_executor_file = $base_path . '/includes/utilities/class-wp-cli-executor.php';
 $cost_optimizer_file = $base_path . '/includes/utilities/class-contenta-cost-optimizer.php';
+$openai_helper_file = $base_path . '/includes/utilities/class-openai-helper.php';
 
 $deployer->log("檢查 WP_CLI_Executor 檔案: {$wp_cli_executor_file}");
 if (file_exists($wp_cli_executor_file)) {
@@ -41,6 +42,15 @@ if (file_exists($cost_optimizer_file)) {
 } else {
     $deployer->log("錯誤: 找不到 Contenta_Cost_Optimizer 類別檔案: {$cost_optimizer_file}");
     return ['status' => 'error', 'message' => '找不到 Contenta_Cost_Optimizer 類別檔案'];
+}
+
+$deployer->log("檢查 OpenAIHelper 檔案: {$openai_helper_file}");
+if (file_exists($openai_helper_file)) {
+    require_once $openai_helper_file;
+    $deployer->log("OpenAIHelper 載入成功");
+} else {
+    $deployer->log("錯誤: 找不到 OpenAIHelper 類別檔案: {$openai_helper_file}");
+    return ['status' => 'error', 'message' => '找不到 OpenAIHelper 類別檔案'];
 }
 
 // 載入處理後的資料
@@ -186,22 +196,25 @@ function clean_ai_content($content) {
  */
 function call_openai_api($prompt, $model = 'gpt-4o-mini', $max_tokens = 2000, $api_key = null) {
     global $deployer;
-    
+
     if ($api_key === null) {
         global $openai_api_key;
         $api_key = $openai_api_key;
     }
-    
+
     $url = 'https://api.openai.com/v1/chat/completions';
-    
-    $data = [
-        'model' => $model,
-        'messages' => [
+
+    // 使用 OpenAIHelper 建構請求資料（自動處理新舊模型差異）
+    $data = OpenAIHelper::buildRequestData(
+        $model,
+        [
             ['role' => 'user', 'content' => $prompt]
         ],
-        'max_tokens' => $max_tokens,
-        'temperature' => 0.7
-    ];
+        [
+            'max_tokens' => $max_tokens,
+            'temperature' => 0.7
+        ]
+    );
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
@@ -550,8 +563,8 @@ foreach ($prompts as $index => $article_prompt) {
         $text_color = $color_scheme['text'] ?? '#1E293B';
         $accent_color = $color_scheme['accent'] ?? '#0F172A';
         
-        $color_description = "deep blue ({$primary_color}), light blue ({$secondary_color}), with subtle dark gray ({$accent_color}) accents";
-        
+        //$color_description = "deep blue ({$primary_color}), light blue ({$secondary_color}), with subtle dark gray ({$accent_color}) accents";
+        $color_description = "primary color {$primary_color}, secondary color {$secondary_color}, accent color {$accent_color}, text color {$text_color}";
         // 根據風格設定生成提示詞指令
         if ($style_preference === 'humaaans' && $enable_humaaans) {
             $style_guidance = "

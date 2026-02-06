@@ -2,11 +2,14 @@
 /**
  * 步驟 9.5: 動態圖片需求分析與生成
  * 基於已組合的頁面內容分析圖片需求，生成個性化的 image-prompts.json
- * 
+ *
  * 圖片生成流程重構 - Phase 1 Day 2
  * 解決問題：AI 照抄模板、缺乏個性化、時機不當
  * 解決方案：基於實際頁面內容生成圖片需求，100% 個性化
  */
+
+// 載入 OpenAI 輔助類別
+require_once DEPLOY_BASE_PATH . '/includes/utilities/class-openai-helper.php';
 
 // 只在作為步驟腳本執行時運行主要邏輯
 if (isset($job_id) && isset($deployer)) {
@@ -964,15 +967,18 @@ function callAIForImagePrompts($prompt, $ai_config, $ai_service, $deployer)
 function callOpenAIForImagePrompts($prompt, $ai_config, $deployer)
 {
     $url = rtrim($ai_config['base_url'], '/') . '/chat/completions';
-    
-    $data = [
-        'model' => $ai_config['model'],
-        'messages' => [
+
+    // 使用 OpenAIHelper 建構請求資料（自動處理新舊模型差異）
+    $data = OpenAIHelper::buildRequestData(
+        $ai_config['model'],
+        [
             ['role' => 'user', 'content' => $prompt]
         ],
-        'max_tokens' => 3000,
-        'temperature' => 0.7
-    ];
+        [
+            'max_tokens' => 3000,
+            'temperature' => 0.7
+        ]
+    );
     
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
